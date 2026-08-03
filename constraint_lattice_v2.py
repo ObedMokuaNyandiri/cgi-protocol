@@ -541,7 +541,7 @@ class EmbeddingEngine:
                 f"Original error: {exc}"
             ) from exc
 
-    def encode(self, texts: list[str]) -> np.ndarray:  # type: ignore[name-defined]
+    def encode(self, texts: list[str]) -> Any:
         """
         Encode texts into L2-normalized embedding vectors.
         Fully deterministic under fixed torch seed.

@@ -18,10 +18,11 @@ import sys
 import time
 import unittest.mock
 import uuid
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding as asym_padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -45,7 +46,7 @@ LOG_DIR     = os.path.join(BASE_DIR, "logs")
 REPLAY_FILE = os.path.join(LOG_DIR, "replay_cache.json")
 
 
-def setup_clean_env() -> Tuple[str, str]:
+def setup_clean_env() -> tuple[str, str]:
     """Ensure all required directories and seed files exist."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(AUTH_DIR,   exist_ok=True)
@@ -150,7 +151,7 @@ def generate_demo_token(auth_dir: str, user_prompt: str) -> str:
         extensions={},
     )
 
-    token: Dict[str, Any] = {
+    token: dict[str, Any] = {
         "token_id":     f"demo-{uuid.uuid4().hex[:8]}",
         "epoch_id":     "demo",
         "token_budget": 200,
@@ -164,7 +165,7 @@ def generate_demo_token(auth_dir: str, user_prompt: str) -> str:
     payload_bytes = json.dumps(token, sort_keys=True, separators=(",", ":")).encode("utf-8")
     signature     = _sign(private_key, payload_bytes)
 
-    artifact: Dict[str, Any] = {
+    artifact: dict[str, Any] = {
         "token":     token,
         "signature": base64.b64encode(signature).decode("utf-8"),
     }
@@ -212,6 +213,7 @@ def main() -> None:
                 ):
                     # Import inside mock context so module-level patches are applied
                     import importlib
+
                     import cgi_runtime
                     importlib.reload(cgi_runtime)
 
@@ -245,7 +247,7 @@ def main() -> None:
     print(f"  Stop Reason  : {metrics.get('stop_reason')}")
     print(f"  Memory (RSS) : {metrics.get('peak_child_memory_mb')} MB")
     print(DIVIDER)
-    print(f"\n  Full bundle  : outputs/portable_attestation_latest.json")
+    print("\n  Full bundle  : outputs/portable_attestation_latest.json")
     print(DIVIDER + "\n")
 
 

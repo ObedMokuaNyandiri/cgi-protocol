@@ -2,7 +2,6 @@ import json
 import os
 import subprocess
 import time
-import shutil
 
 print("==================================================")
 print(" OPTIMISTIC AI EXECUTION (AVS FRAUD PROOF) TEST")
@@ -17,8 +16,10 @@ if os.path.exists("logs/replay_cache.json"):
 # 2. Generate Auth Token and FHE setup
 print("\n[+] Generating Auth Token and FHE payload...")
 import sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 from fhe_simulator import FHESimulator
+
 pub_key, priv_key = FHESimulator.generate_keys()
 raw_prompt = "AGENT_ACTION"
 encrypted_prompt = FHESimulator.encrypt(raw_prompt, pub_key)

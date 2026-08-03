@@ -1,6 +1,6 @@
 import hashlib
 import json
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 # Canonical zero root — returned instead of "" for an empty tree (FLAW-014)
 ZERO_ROOT = "0" * 64
@@ -16,14 +16,14 @@ class MerkleTree:
     """
 
     def __init__(self):
-        self.leaves: List[str] = []
-        self._tree_cache: Optional[List[List[str]]] = None   # None == dirty
+        self.leaves: list[str] = []
+        self._tree_cache: list[list[str]] | None = None   # None == dirty
 
     # ------------------------------------------------------------------
     # Mutation
     # ------------------------------------------------------------------
 
-    def add_leaf(self, data: Dict[str, Any]) -> str:
+    def add_leaf(self, data: dict[str, Any]) -> str:
         data_str = json.dumps(data, sort_keys=True, separators=(",", ":"))
         leaf_hash = hashlib.sha256(data_str.encode("utf-8")).hexdigest()
         self.leaves.append(leaf_hash)
@@ -34,14 +34,14 @@ class MerkleTree:
     # Internal: lazy build
     # ------------------------------------------------------------------
 
-    def _build_tree(self) -> List[List[str]]:
+    def _build_tree(self) -> list[list[str]]:
         """Builds the full tree from leaves. Called lazily."""
         if not self.leaves:
             return []
-        current_level: List[str] = list(self.leaves)
-        tree: List[List[str]] = [current_level]
+        current_level: list[str] = list(self.leaves)
+        tree: list[list[str]] = [current_level]
         while len(current_level) > 1:
-            next_level: List[str] = []
+            next_level: list[str] = []
             for i in range(0, len(current_level), 2):
                 left  = current_level[i]
                 right = current_level[i + 1] if i + 1 < len(current_level) else left
@@ -52,7 +52,7 @@ class MerkleTree:
         return tree
 
     @property
-    def _tree(self) -> List[List[str]]:
+    def _tree(self) -> list[list[str]]:
         if self._tree_cache is None:
             self._tree_cache = self._build_tree()
         return self._tree_cache
@@ -66,8 +66,8 @@ class MerkleTree:
             return ZERO_ROOT            # FIX FLAW-014: never return ""
         return self._tree[-1][0]
 
-    def get_proof(self, index: int) -> List[Dict[str, str]]:
-        proof: List[Dict[str, str]] = []
+    def get_proof(self, index: int) -> list[dict[str, str]]:
+        proof: list[dict[str, str]] = []
         tree = self._tree
         if not tree or index >= len(self.leaves):
             return proof
@@ -90,7 +90,7 @@ class MerkleTree:
         return proof
 
 
-def verify_merkle_proof(leaf_hash: str, proof: List[Dict[str, str]], root: str) -> bool:
+def verify_merkle_proof(leaf_hash: str, proof: list[dict[str, str]], root: str) -> bool:
     current_hash = leaf_hash
     for p in proof:
         if p["position"] == "left":
@@ -101,13 +101,13 @@ def verify_merkle_proof(leaf_hash: str, proof: List[Dict[str, str]], root: str) 
     return current_hash == root
 
 
-def recompute_root_from_leaves(leaves: List[str]) -> str:
+def recompute_root_from_leaves(leaves: list[str]) -> str:
     """Mathematically rebuild the Merkle Root from raw leaf hashes."""
     if not leaves:
         return ZERO_ROOT              # FIX FLAW-014
-    current_level: List[str] = list(leaves)
+    current_level: list[str] = list(leaves)
     while len(current_level) > 1:
-        next_level: List[str] = []
+        next_level: list[str] = []
         for i in range(0, len(current_level), 2):
             left  = current_level[i]
             right = current_level[i + 1] if i + 1 < len(current_level) else left

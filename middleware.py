@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 import uuid
-import logging
 from collections import defaultdict
-from typing import Dict, List, Optional, Set
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -48,7 +47,7 @@ class APIKeyStore:
     """
 
     def __init__(self, keys_file: str):
-        self._keys: Dict[str, dict] = {}  # key_hash -> metadata
+        self._keys: dict[str, dict] = {}  # key_hash -> metadata
         self._file = keys_file
         self._load()
 
@@ -70,7 +69,7 @@ class APIKeyStore:
     def is_enabled(self) -> bool:
         return len(self._keys) > 0
 
-    def authenticate(self, raw_key: str) -> Optional[dict]:
+    def authenticate(self, raw_key: str) -> dict | None:
         """Returns key metadata if valid, None otherwise."""
         key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
         return self._keys.get(key_hash)
@@ -87,7 +86,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     Skips authentication for health check and public key endpoints.
     """
 
-    EXEMPT_PATHS: Set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
+    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
 
     def __init__(self, app, key_store: APIKeyStore):
         super().__init__(app)
@@ -137,7 +136,7 @@ class RateLimiter:
     def __init__(self, max_requests: int = 30, window_seconds: int = 60):
         self._max = max_requests
         self._window = window_seconds
-        self._buckets: Dict[str, List[float]] = defaultdict(list)
+        self._buckets: dict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, identity: str) -> bool:
         now = time.monotonic()
@@ -162,7 +161,7 @@ class RateLimiter:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Enforces per-key (or per-IP) rate limiting."""
 
-    EXEMPT_PATHS: Set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
+    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
 
     def __init__(self, app, limiter: RateLimiter):
         super().__init__(app)

@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+
 class MemoryManager:
     """
     Implements a Persistent Memory Merkle Tree for the Chronos Architecture.

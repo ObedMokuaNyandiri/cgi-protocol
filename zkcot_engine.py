@@ -28,15 +28,16 @@ Architecture:
 import hashlib
 import time
 import uuid
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from constraint_lattice import (
-    ConstraintLattice,
-    ViolationSeverity,
-    ConstraintViolation,
     LATTICE_FINGERPRINT,
+    ConstraintLattice,
+    ConstraintViolation,
+    ViolationSeverity,
 )
+
 try:
     from constraint_lattice_v2 import ViolationEvidenceCertificate
 except ImportError:
@@ -60,9 +61,9 @@ class ThoughtStep:
     # The chained commitment: H(prev_commitment || content || index)
     commitment_hash: str
     # STARK-like proof for this step
-    constraint_proof: Dict[str, Any]
+    constraint_proof: dict[str, Any]
     timestamp_ns: int
-    violated_constraints: List[str]
+    violated_constraints: list[str]
     max_severity: int  # 0 = clean, 1 = L2 warning, 2 = L1 critical, 3 = L0 FATAL
 
     def to_dict(self) -> dict:
@@ -74,15 +75,15 @@ class DeliberationTranscript:
     transcript_id: str
     execution_id: str
     prompt_hash: str
-    thought_steps: List[ThoughtStep]
+    thought_steps: list[ThoughtStep]
     final_commitment: str
     genesis_commitment: str
-    accumulated_reasoning_proof: Dict[str, Any]
+    accumulated_reasoning_proof: dict[str, Any]
     total_steps: int
     deliberation_duration_ms: int
     is_aligned: bool
-    l0_violations: List[Dict]
-    encrypted_global_violation: Optional[Any] = None
+    l0_violations: list[dict]
+    encrypted_global_violation: Any | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -106,7 +107,7 @@ class FatalConstraintViolation(Exception):
     def __init__(
         self,
         step: ThoughtStep,
-        violations: List[ConstraintViolation],
+        violations: list[ConstraintViolation],
         evidence_commitment: str,
     ):
         self.step = step
@@ -124,7 +125,7 @@ class FatalConstraintViolation(Exception):
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _violation_from_dict(d: Dict[str, Any]) -> ConstraintViolation:
+def _violation_from_dict(d: dict[str, Any]) -> ConstraintViolation:
     """
     Safely reconstruct a ConstraintViolation from a serialized dict.
     Handles the optional ViolationEvidenceCertificate field — during FHE mode,
@@ -147,9 +148,10 @@ def _violation_from_dict(d: Dict[str, Any]) -> ConstraintViolation:
                 step_index=ec_dict.get("step_index", 0),
                 thought_excerpt=ec_dict.get("thought_excerpt", ""),
             )
-        except Exception:
+        except (ValueError, TypeError, KeyError):
+            import logging
+            logging.getLogger(__name__).exception("Failed to reconstruct evidence_certificate")
             # If reconstruction fails, leave evidence_certificate as None
-            pass
     return violation
 
 
@@ -171,14 +173,14 @@ class ZkCoTEngine:
 
     GENESIS_SEED = "SIP_V10_SOVEREIGN_INTELLIGENCE_PROTOCOL_GENESIS"
 
-    def __init__(self, contract, lattice: Optional[ConstraintLattice] = None):
+    def __init__(self, contract, lattice: ConstraintLattice | None = None):
         self.contract = contract
         self.lattice = lattice or ConstraintLattice()
-        self._steps: List[ThoughtStep] = []
-        self._current_commitment: Optional[str] = None
-        self._genesis_commitment: Optional[str] = None
+        self._steps: list[ThoughtStep] = []
+        self._current_commitment: str | None = None
+        self._genesis_commitment: str | None = None
         self._transcript_id = str(uuid.uuid4())
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         
         # Oblivious Semantic Gating (v11.1)
         self.encrypted_global_violation = None
@@ -202,7 +204,7 @@ class ZkCoTEngine:
         # v11.0: bind lattice fingerprint so corpus mutations break the ARP chain
         self._genesis_commitment = hashlib.sha256(
             f"{self.GENESIS_SEED}|{contract_hash}|{self._transcript_id}|{LATTICE_FINGERPRINT}"
-            .encode("utf-8")
+            .encode()
         ).hexdigest()
         self._current_commitment = self._genesis_commitment
         print(
@@ -228,7 +230,7 @@ class ZkCoTEngine:
             stored_thought_content = f"<FHE_CIPHERTEXT:{thought_content.get_commitment()}>"
             # FHE Commitment uses the stored string so it matches the verifier
             new_commitment = hashlib.sha256(
-                f"{self._current_commitment}|{stored_thought_content}|{step_index}".encode("utf-8")
+                f"{self._current_commitment}|{stored_thought_content}|{step_index}".encode()
             ).hexdigest()
             
             # Homomorphically evaluate constraints (returns FHECiphertext of the JSON result)
@@ -258,15 +260,15 @@ class ZkCoTEngine:
 
             # For the mock simulation (STARK generation), we still decrypt it internally
             # to populate the ThoughtStep, but we will NOT abort based on it.
-            import json
             import base64
+            import json
             compliance_json = base64.b64decode(encrypted_compliance._payload).decode("utf-8")
             violation_dicts = json.loads(compliance_json)
             violations = [_violation_from_dict(v) for v in violation_dicts]
         else:
             # V10.0 Standard Plaintext processing
             new_commitment = hashlib.sha256(
-                f"{self._current_commitment}|{thought_content}|{step_index}".encode("utf-8")
+                f"{self._current_commitment}|{thought_content}|{step_index}".encode()
             ).hexdigest()
             violations = self.lattice.check(thought_content, step_index)
             stored_thought_content = thought_content
@@ -308,7 +310,7 @@ class ZkCoTEngine:
         if l0_hits:
             if is_fhe:
                 print(f"[zkCoT] [!] L0 FATAL at step {step_index}. System is in Blind Sovereign Mode.")
-                print(f"[zkCoT] [!] The violation flag has been homomorphically accumulated. Output will be mathematically zeroed out.")
+                print("[zkCoT] [!] The violation flag has been homomorphically accumulated. Output will be mathematically zeroed out.")
             else:
                 raise FatalConstraintViolation(step, l0_hits, new_commitment)
 
@@ -359,8 +361,8 @@ class ZkCoTEngine:
     def _generate_step_proof(
         self,
         commitment: str,
-        violations: List[ConstraintViolation],
-    ) -> Dict[str, Any]:
+        violations: list[ConstraintViolation],
+    ) -> dict[str, Any]:
         """
         Generates a STARK-mock proof for a single reasoning step.
 
@@ -388,11 +390,11 @@ class ZkCoTEngine:
         # AND the lattice fingerprint — corpus changes break this witness
         proof_witness = hashlib.sha256(
             f"stark_witness|{commitment}|{compliance_flag}|{len(violations)}|{LATTICE_FINGERPRINT}"
-            .encode("utf-8")
+            .encode()
         ).hexdigest()
 
         # Collect VEC payloads for regulatory forensics
-        evidence_certificates: List[Dict[str, Any]] = []
+        evidence_certificates: list[dict[str, Any]] = []
         for v in violations:
             if v.evidence_certificate is not None:
                 evidence_certificates.append(v.evidence_certificate.to_dict())
@@ -402,7 +404,7 @@ class ZkCoTEngine:
             "|".join(ec.get("cert_hash", "") for ec in evidence_certificates).encode("utf-8")
         ).hexdigest() if evidence_certificates else ""
 
-        proof: Dict[str, Any] = {
+        proof: dict[str, Any] = {
             "protocol": "STARK-FRI-mock-v1",
             "lattice_version": LATTICE_FINGERPRINT,   # corpus binding
             "is_compliant": is_compliant,
@@ -417,7 +419,7 @@ class ZkCoTEngine:
         }
         return proof
 
-    def _accumulate_proofs(self) -> Dict[str, Any]:
+    def _accumulate_proofs(self) -> dict[str, Any]:
         """
         Recursively folds all step proofs into a single Accumulated Reasoning Proof (ARP).
 
@@ -435,11 +437,11 @@ class ZkCoTEngine:
         for step in self._steps:
             witness = step.constraint_proof["proof_witness"]
             accumulator = hashlib.sha256(
-                f"{accumulator}|{witness}|{step.commitment_hash}".encode("utf-8")
+                f"{accumulator}|{witness}|{step.commitment_hash}".encode()
             ).hexdigest()
 
         arp_hash = hashlib.sha256(
-            f"ARP|{accumulator}|{self._current_commitment}|{len(self._steps)}".encode("utf-8")
+            f"ARP|{accumulator}|{self._current_commitment}|{len(self._steps)}".encode()
         ).hexdigest()
 
         return {

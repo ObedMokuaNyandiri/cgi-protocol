@@ -1,7 +1,8 @@
-import sys
 import json
+import sys
+
 try:
-    from fhe_simulator import FHESimulator, FHEPublicKey
+    from fhe_simulator import FHEPublicKey, FHESimulator
 except ImportError as e:
     print(f"Error loading FHESimulator: {e}")
     sys.exit(1)
@@ -29,7 +30,7 @@ gated_output = FHESimulator.homomorphic_multiplex_string(enc_real, enc_decoy, en
 decrypted_output = FHESimulator.decrypt(gated_output, priv_key)
 
 if decrypted_output == real_strategy:
-    print(f"[SUCCESS] Valid execution correctly returned the real strategy.")
+    print("[SUCCESS] Valid execution correctly returned the real strategy.")
     print(f"  -> Decrypted: {decrypted_output}")
 else:
     print(f"[FAIL] Expected real strategy, got {decrypted_output}")
@@ -46,7 +47,7 @@ decrypted_output = FHESimulator.decrypt(gated_output, priv_key)
 # Before HDM, this would have decrypted to "0000000..." allowing the attacker to map the boundary.
 # With HDM, it decrypts to a mathematically doomed honeypot.
 if decrypted_output == decoy_strategy:
-    print(f"[SUCCESS] Constraint violation seamlessly triggered the Decoy Manifold!")
+    print("[SUCCESS] Constraint violation seamlessly triggered the Decoy Manifold!")
     print(f"  -> Decrypted (Honeypot): {decrypted_output}")
     print("[SUCCESS] The attacker is unaware they crossed a boundary. If they deploy capital, they get liquidated.")
 else:

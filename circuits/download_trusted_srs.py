@@ -1,6 +1,6 @@
-import os
-import hashlib
 import asyncio
+import hashlib
+import os
 
 try:
     import ezkl
@@ -43,7 +43,7 @@ def verify_srs_hash(file_path: str) -> bool:
         return True
         
     if file_hash != EXPECTED_HASH:
-        print(f"[CRITICAL ERROR] SRS Hash Mismatch!")
+        print("[CRITICAL ERROR] SRS Hash Mismatch!")
         print(f"Expected: {EXPECTED_HASH}")
         print(f"Actual:   {file_hash}")
         return False

@@ -1,6 +1,5 @@
-import json
 import copy
-from typing import Any, Dict
+import json
 
 # ---------------------------------------------------------------------------
 # SAFE FIELD ALLOW-LIST
@@ -9,7 +8,7 @@ from typing import Any, Dict
 # type will be persisted to state. This gives the memory tree real utility.
 # ---------------------------------------------------------------------------
 
-_SAFE_FIELDS: Dict[str, type] = {
+_SAFE_FIELDS: dict[str, type] = {
     "portfolio_value":  (int, float),
     "last_trade":       str,
     "ticker":           str,
@@ -92,7 +91,7 @@ class StateReducer:
         except (json.JSONDecodeError, ValueError) as e:
             # FALLBACK: Preserve all financial balances (NO-OP on portfolio).
             # Log the error so auditors can detect repeated malformed outputs.
-            new_state["last_error"] = f"ParseFailed: {str(e)}"
+            new_state["last_error"] = f"ParseFailed: {e!s}"
             new_state.pop("last_applied_fields", None)
 
         return new_state

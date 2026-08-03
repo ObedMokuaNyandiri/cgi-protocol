@@ -7,7 +7,7 @@ eliminate the hash-divergence bug (FLAW-002).
 """
 import hashlib
 import json
-from typing import Any, Dict
+from typing import Any
 
 
 def hash_component(comp: Any) -> str:
@@ -17,7 +17,7 @@ def hash_component(comp: Any) -> str:
     ).hexdigest()
 
 
-def compute_canonical_root(payload: Dict[str, Any]) -> str:
+def compute_canonical_root(payload: dict[str, Any]) -> str:
     """
     Derives the deterministic canonical root hash from a payload dict.
 
@@ -36,12 +36,12 @@ def compute_canonical_root(payload: Dict[str, Any]) -> str:
 
     root = hashlib.sha256(
         f"{c_hash}|{rs_hash}|{ri_hash}|{oc_hash}|{ev_hash}|{gs_hash}|{vv_hash}|{del_hash}"
-        .encode("utf-8")
+        .encode()
     ).hexdigest()
     return root
 
 
-def compute_component_hashes(payload: Dict[str, Any]) -> Dict[str, str]:
+def compute_component_hashes(payload: dict[str, Any]) -> dict[str, str]:
     """Returns a dict of all component hashes for inclusion in the attestation block."""
     return {
         "contract_hash":             hash_component(payload.get("contract", {})),

@@ -20,7 +20,7 @@ def mock_execute_optimistic(epoch, prev_root, new_root):
 
 def mock_challenge(fraudulent_epoch):
     print(f"\n[CHALLENGE] Fraud proven for Epoch {fraudulent_epoch}!")
-    print(f"  -> Executing O(1) Cascading Rollback...")
+    print("  -> Executing O(1) Cascading Rollback...")
     if latestUnfinalizedEpoch[agent_id] >= fraudulent_epoch:
         latestUnfinalizedEpoch[agent_id] = fraudulent_epoch - 1
     return True

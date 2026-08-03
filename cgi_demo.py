@@ -19,7 +19,6 @@ import subprocess
 import sys
 import time
 
-
 # =========================================================
 # RICH TERMINAL OUTPUT
 # =========================================================
@@ -149,8 +148,8 @@ def demo_full_lifecycle():
     stop_lines  = [l for l in lines if "[WORKER_STOP]" in l]
     stop_reason = stop_lines[-1].split("reason=")[-1] if stop_lines else "unknown"
 
-    ok(f"Enclave Provider : aws-nitro (dev-mode)")
-    ok(f"Constraints      : CUBLAS_WORKSPACE_CONFIG=:4096:8 | PYTHONHASHSEED=42")
+    ok("Enclave Provider : aws-nitro (dev-mode)")
+    ok("Constraints      : CUBLAS_WORKSPACE_CONFIG=:4096:8 | PYTHONHASHSEED=42")
     ok(f"Tokens Generated : {len(token_lines)}")
     ok(f"Stop Reason      : {stop_reason}")
     pause()
@@ -181,7 +180,7 @@ def demo_full_lifecycle():
     info("Loading CGI SDK auditor...")
     pause()
 
-    from cgi_sdk import CGIAuditor, AuditOutcome
+    from cgi_sdk import CGIAuditor
     auditor = CGIAuditor.from_file("outputs/portable_attestation.json")
     result = auditor.verify()
 
@@ -266,7 +265,7 @@ def demo_registry():
         # Tamper test: briefly corrupt one entry and re-verify
         print()
         print(T.YELLOW + T.BOLD + "  TAMPER TEST: Simulating chain corruption..." + T.RESET)
-        import copy, json
+        import json
         with open("outputs/chain.json", "r") as f:
             chain_data = json.load(f)
 

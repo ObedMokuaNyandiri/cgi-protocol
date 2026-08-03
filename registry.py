@@ -10,13 +10,13 @@ FIXES applied:
   FLAW-013: Duplicate root_hash guard — rejects identical attestations.
 """
 
-import json
 import hashlib
+import json
 import os
 import time
-from typing import Dict, Any, Optional, List
-from filelock import FileLock
+from typing import Any
 
+from filelock import FileLock
 
 CHAIN_FILE = "outputs/chain.jsonl"          # CHANGED: JSONL, not JSON
 CHAIN_META_FILE = "outputs/chain_meta.json"  # Stores tip + length only
@@ -35,7 +35,7 @@ class ChainEntry:
         verdict: str,
         model_id: str,
         timestamp: float,
-        previous_entry_hash: Optional[str],
+        previous_entry_hash: str | None,
     ):
         self.sequence           = sequence
         self.root_hash          = root_hash
@@ -66,7 +66,7 @@ class ChainEntry:
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "sequence":            self.sequence,
             "root_hash":           self.root_hash,
@@ -101,7 +101,7 @@ class AttestationRegistry:
     # Private helpers
     # ------------------------------------------------------------------ #
 
-    def _load_meta(self) -> Dict[str, Any]:
+    def _load_meta(self) -> dict[str, Any]:
         """Load lightweight tip metadata from meta file."""
         if os.path.exists(self.meta_path):
             try:
@@ -195,14 +195,14 @@ class AttestationRegistry:
 
             return entry
 
-    def verify_chain(self) -> Dict[str, Any]:
+    def verify_chain(self) -> dict[str, Any]:
         """
         O(N) sequential scan without loading the entire chain into RAM.
         Verifies hash-linking and field integrity for each entry.
         """
-        errors: List[str] = []
-        tampered_at: Optional[int] = None
-        prev_hash: Optional[str] = None
+        errors: list[str] = []
+        tampered_at: int | None = None
+        prev_hash: str | None = None
         length = 0
 
         for raw in self._iter_entries():
@@ -263,7 +263,7 @@ class AttestationRegistry:
         lines.append("=" * 60)
         return "\n".join(lines)
 
-    def get_by_root_hash(self, root_hash: str) -> Optional[Dict]:
+    def get_by_root_hash(self, root_hash: str) -> dict | None:
         for raw in self._iter_entries():
             if raw["root_hash"] == root_hash:
                 return raw

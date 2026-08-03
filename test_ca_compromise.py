@@ -1,5 +1,3 @@
-import sys
-import time
 
 print("==========================================================")
 print(" ON-CHAIN TEE TRANSPARENCY LOGS (CA COMPROMISE) TEST")
@@ -24,7 +22,7 @@ def mock_register_tee(pub_key, ca_attestation):
         "status": TEEStatus.PENDING,
         "activation_time": current_block_time + TEE_TIMELOCK_SECONDS
     }
-    return True, f"TEE Registered. Trapped in 7-day Time-Lock."
+    return True, "TEE Registered. Trapped in 7-day Time-Lock."
 
 def mock_activate_tee(pub_key):
     if pub_key not in tee_registry:

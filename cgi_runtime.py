@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 try:
     import resource as _resource_mod
@@ -32,13 +32,14 @@ except ImportError:
     _HAS_RESOURCE = False
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa, padding as asym_padding
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from filelock import FileLock
 
-from merkle import MerkleTree
 from contract import InferenceContract
-from enclave.key_release import RemoteKMS
 from enclave.attestation import TEEAttestation
+from enclave.key_release import RemoteKMS
+from merkle import MerkleTree
 from registry import AttestationRegistry
 
 # =========================================================
@@ -99,7 +100,7 @@ def _sign_bytes(private_key: Any, data: bytes) -> bytes:
 # =========================================================
 # WORKER STDOUT PROTOCOL — FIX FLAW-006
 # =========================================================
-def _parse_worker_output(stdout: str) -> Tuple[str, str, int]:
+def _parse_worker_output(stdout: str) -> tuple[str, str, int]:
     """
     Deterministic parser for worker.py stdout protocol.
     Returns: (generated_text, stop_reason, token_count)
@@ -173,8 +174,8 @@ class CGIRuntime:
 
     def __init__(
         self,
-        attester: Optional[TEEAttestation] = None,
-        kms: Optional[RemoteKMS] = None,
+        attester: TEEAttestation | None = None,
+        kms: RemoteKMS | None = None,
     ):
         self.audit_merkle_tree = MerkleTree()
 
@@ -198,8 +199,8 @@ class CGIRuntime:
     # =========================================================
     # AUDIT SYSTEM (MERKLE TREE) — FIX FLAW-004
     # =========================================================
-    def audit(self, event: str, data: Dict[str, Any]) -> str:
-        entry: Dict[str, Any] = {
+    def audit(self, event: str, data: dict[str, Any]) -> str:
+        entry: dict[str, Any] = {
             "timestamp": time.time(),
             "event":     event,
             "data":      data,
@@ -224,7 +225,7 @@ class CGIRuntime:
     # =========================================================
     # CONTRACT PARSING
     # =========================================================
-    def parse_and_validate_contract(self, token_payload: Dict[str, Any]) -> InferenceContract:
+    def parse_and_validate_contract(self, token_payload: dict[str, Any]) -> InferenceContract:
         # FIX FLAW-003: enforce token expiry
         expires_at = token_payload.get("expires")
         if expires_at is not None and time.time() > expires_at:
@@ -245,7 +246,7 @@ class CGIRuntime:
     # =========================================================
     # EPOCH EXECUTION
     # =========================================================
-    def run_epoch(self) -> Dict[str, Any]:
+    def run_epoch(self) -> dict[str, Any]:
         token_path = os.environ.get("CGI_TOKEN_PATH", os.path.join(BASE_DIR, "auth", "epoch_token.json"))
 
         if not os.path.exists(token_path):
@@ -264,7 +265,7 @@ class CGIRuntime:
         # ── 1. Replay-attack guard ─────────────────────────────────────────
         # FIX FLAW-007: unified path constant
         with FileLock(REPLAY_FILE + ".lock", timeout=10):
-            cache: Dict[str, float] = {}
+            cache: dict[str, float] = {}
             if os.path.exists(REPLAY_FILE):
                 try:
                     with open(REPLAY_FILE, "r") as f_in:
@@ -341,7 +342,7 @@ class CGIRuntime:
         # FIX FLAW-002: real metrics — not fabricated constants
         peak_memory_mb = _measure_peak_memory_mb()
 
-        execution_metrics: Dict[str, Any] = {
+        execution_metrics: dict[str, Any] = {
             "wall_duration_ms":         wall_ms,
             "tokens_generated":         token_count,
             "stop_reason":              stop_reason,
@@ -357,7 +358,7 @@ class CGIRuntime:
         print(f"[RUNTIME] Output preview: {generated_text[:120]}...")
 
         # ── 5. Build the portable attestation bundle ───────────────────────
-        bundle: Dict[str, Any] = {
+        bundle: dict[str, Any] = {
             "schema_version": "cgi-attestation-v3.1",
             "payload": {
                 "contract": contract.to_dict(),

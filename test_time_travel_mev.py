@@ -1,5 +1,4 @@
 import sys
-import time
 
 try:
     from zktls_fetcher import fetch_with_zktls

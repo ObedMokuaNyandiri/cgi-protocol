@@ -1,5 +1,6 @@
-import sys
 import json
+import sys
+
 try:
     from memory_manager import MemoryManager
     from state_reducer import StateReducer
@@ -22,7 +23,7 @@ print(f"  -> Genesis State: {mem_manager.state}")
 print("\n--- TEST 1: Valid LLM Action Payload ---")
 valid_payload = json.dumps({"portfolio_value": 1200000, "last_trade": "BUY_BTC"})
 prev_root, new_root, delta = mem_manager.apply_action(valid_payload)
-print(f"[SUCCESS] Valid payload successfully reduced.")
+print("[SUCCESS] Valid payload successfully reduced.")
 print(f"  -> New State: {mem_manager.state}")
 print(f"  -> Memory Delta: {delta}")
 
@@ -35,7 +36,7 @@ malformed_payload = '{"portfolio_value": NaN, "last_trade": "SELL_ALL", broken_j
 
 prev_root_bad, new_root_bad, delta_bad = mem_manager.apply_action(malformed_payload)
 
-print(f"[SUCCESS] StateReducer intercepted the hallucination!")
+print("[SUCCESS] StateReducer intercepted the hallucination!")
 print(f"  -> New State: {mem_manager.state}")
 print(f"  -> Memory Delta: {delta_bad}")
 

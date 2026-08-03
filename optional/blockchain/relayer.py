@@ -1,8 +1,8 @@
-import os
-import sys
-import json
 import base64
 import hashlib
+import json
+import os
+import sys
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
@@ -89,7 +89,7 @@ def main():
     print("  READY FOR SMART CONTRACT SUBMISSION")
     print("============================================================")
     
-    print(f"\nCall verifyAttestation on CGI_Verifier.sol with the following parameters:\n")
+    print("\nCall verifyAttestation on CGI_Verifier.sol with the following parameters:\n")
     print(f"rootHash : 0x{payload_hash_hex}")
     print(f"r        : 0x{r:064x}")
     print(f"s        : 0x{s:064x}")

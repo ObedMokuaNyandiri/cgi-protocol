@@ -45,9 +45,9 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class ViolationEvidenceCertificate:
     cosine_similarity: float                    # similarity to concept centroid
     semantic_distance: float                    # 1.0 - cosine_similarity
     nearest_exemplar: str                       # corpus phrase closest to the thought
-    matched_lexical_pattern: Optional[str]      # keyword matched, or None
+    matched_lexical_pattern: str | None      # keyword matched, or None
     human_rationale: str                        # plain-English explanation for regulators
     step_index: int
     timestamp_ns: int
@@ -114,7 +114,7 @@ class ViolationEvidenceCertificate:
         )
         self.cert_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     def to_regulatory_report(self) -> str:
@@ -172,7 +172,7 @@ class ConstraintViolation:
     confidence: float
     step_index: int
     evidence_hash: str = field(default="")
-    evidence_certificate: Optional[ViolationEvidenceCertificate] = field(
+    evidence_certificate: ViolationEvidenceCertificate | None = field(
         default=None, repr=False
     )
 
@@ -188,13 +188,13 @@ class ConstraintViolation:
         # If a VEC is present, bind it into the hash for stronger tamper-evidence
         if self.evidence_certificate:
             self.evidence_hash = hashlib.sha256(
-                f"{base_hash}|{self.evidence_certificate.cert_hash}".encode("utf-8")
+                f"{base_hash}|{self.evidence_certificate.cert_hash}".encode()
             ).hexdigest()
         else:
             self.evidence_hash = base_hash
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "constraint_name": self.constraint_name,
             "severity": (
                 self.severity.value
@@ -217,7 +217,7 @@ class ConstraintViolation:
 # IMMUTABLE — any change here changes LATTICE_FINGERPRINT, which breaks existing
 # ARP chains. Treat this like a smart contract ABI: version it, don't mutate it.
 
-FORBIDDEN_CONCEPT_CORPUS: Dict[str, Dict[str, Any]] = {
+FORBIDDEN_CONCEPT_CORPUS: dict[str, dict[str, Any]] = {
 
     # ── L0: FATAL ─────────────────────────────────────────────────────────────
     "DECEPTION_DETECTED": {
@@ -505,7 +505,7 @@ class EmbeddingEngine:
 
     MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
 
-    _instance: Optional[EmbeddingEngine] = None
+    _instance: EmbeddingEngine | None = None
     _model: Any = None
     _model_hash: str = ""
 
@@ -517,8 +517,8 @@ class EmbeddingEngine:
 
     def __init__(self) -> None:
         try:
-            from sentence_transformers import SentenceTransformer  # type: ignore
             import torch
+            from sentence_transformers import SentenceTransformer  # type: ignore
             torch.manual_seed(0)
             self._model = SentenceTransformer(self.MODEL_NAME)
             self._model.eval()
@@ -541,7 +541,7 @@ class EmbeddingEngine:
                 f"Original error: {exc}"
             ) from exc
 
-    def encode(self, texts: List[str]) -> "np.ndarray":  # type: ignore[name-defined]
+    def encode(self, texts: list[str]) -> np.ndarray:  # type: ignore[name-defined]
         """
         Encode texts into L2-normalized embedding vectors.
         Fully deterministic under fixed torch seed.
@@ -568,7 +568,7 @@ class EmbeddingEngine:
         This is the value that MUST be committed into the genesis_commitment.
         """
         return hashlib.sha256(
-            f"{LATTICE_FINGERPRINT}|{self._model_hash}".encode("utf-8")
+            f"{LATTICE_FINGERPRINT}|{self._model_hash}".encode()
         ).hexdigest()
 
 
@@ -582,17 +582,17 @@ class _CentroidCache:
     Built once on first DualModeScanner instantiation; zero-cost thereafter.
     """
 
-    _centroids: Optional[Dict[str, Any]] = None
-    _exemplar_embs: Optional[Dict[str, Any]] = None
-    _exemplar_texts: Optional[Dict[str, List[str]]] = None
+    _centroids: dict[str, Any] | None = None
+    _exemplar_embs: dict[str, Any] | None = None
+    _exemplar_texts: dict[str, list[str]] | None = None
 
     @classmethod
     def warm(
         cls, engine: EmbeddingEngine
-    ) -> Tuple[
-        Dict[str, Any],
-        Dict[str, Any],
-        Dict[str, List[str]],
+    ) -> tuple[
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, list[str]],
     ]:
         if cls._centroids is not None:
             return cls._centroids, cls._exemplar_embs, cls._exemplar_texts  # type: ignore
@@ -600,9 +600,9 @@ class _CentroidCache:
         import numpy as np
 
         print("[ConstraintLattice v2] Building concept centroids (one-time)...")
-        centroids: Dict[str, Any] = {}
-        exemplar_embs: Dict[str, Any] = {}
-        exemplar_texts: Dict[str, List[str]] = {}
+        centroids: dict[str, Any] = {}
+        exemplar_embs: dict[str, Any] = {}
+        exemplar_texts: dict[str, list[str]] = {}
 
         for concept, data in FORBIDDEN_CONCEPT_CORPUS.items():
             texts = data["exemplars"]
@@ -659,12 +659,13 @@ class DualModeScanner:
 
     def scan(
         self, thought_content: str, step_index: int
-    ) -> List[ConstraintViolation]:
-        import numpy as np
+    ) -> list[ConstraintViolation]:
         import math
         from collections import Counter
 
-        violations: List[ConstraintViolation] = []
+        import numpy as np
+
+        violations: list[ConstraintViolation] = []
         
         # ── MLSM: Shannon Entropy Shield ───────────────────────────────
         def _calc_entropy(text: str) -> float:
@@ -707,7 +708,7 @@ class DualModeScanner:
         for concept, data in FORBIDDEN_CONCEPT_CORPUS.items():
             threshold: float = data["threshold"]
             severity: ViolationSeverity = data["severity"]
-            lex_patterns: List[str] = data["lexical_patterns"]
+            lex_patterns: list[str] = data["lexical_patterns"]
             ex_embs = self._exemplar_embs[concept]
             ex_texts = self._exemplar_texts[concept]
 
@@ -724,7 +725,7 @@ class DualModeScanner:
             embedding_hit: bool = cosine_sim >= threshold
 
             # ── Lexical check ──────────────────────────────────────────────
-            matched_lex: Optional[str] = None
+            matched_lex: str | None = None
             for pat in lex_patterns:
                 if pat in content_lower:
                     matched_lex = pat
@@ -796,7 +797,7 @@ class DualModeScanner:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class ConstraintLattice:
-    """
+    f"""
     The Semantic Constraint Lattice v2.
 
     Drop-in replacement for ConstraintLattice v1. Full public API preserved:
@@ -813,8 +814,8 @@ class ConstraintLattice:
         lattice.mode                — "EMBEDDING+LEXICAL" | "LEXICAL_ONLY"
         lattice.engine_fingerprint  — combined corpus+model fingerprint
 
-    LatticeFingerprint: {fp}
-    """.format(fp=LATTICE_FINGERPRINT)
+    LatticeFingerprint: {LATTICE_FINGERPRINT}
+    """
 
     LATTICE_FINGERPRINT: str = LATTICE_FINGERPRINT
 
@@ -829,8 +830,8 @@ class ConstraintLattice:
                                   GPU or sentence-transformers installed.
         """
         self._strict = strict_embedding_mode
-        self._scanner: Optional[DualModeScanner] = None
-        self._engine: Optional[EmbeddingEngine] = None
+        self._scanner: DualModeScanner | None = None
+        self._engine: EmbeddingEngine | None = None
         self._mode: str = "UNINITIALIZED"
 
         try:
@@ -873,7 +874,7 @@ class ConstraintLattice:
             return self._engine.combined_fingerprint
         return LATTICE_FINGERPRINT
 
-    def check(self, thought_content: str, step_index: int) -> List[ConstraintViolation]:
+    def check(self, thought_content: str, step_index: int) -> list[ConstraintViolation]:
         """
         Check a single thought step against the full semantic constraint lattice.
 
@@ -896,9 +897,9 @@ class ConstraintLattice:
 
     def _lexical_fallback(
         self, thought_content: str, step_index: int
-    ) -> List[ConstraintViolation]:
+    ) -> list[ConstraintViolation]:
         """Lexical-only scan — identical behavior to ConstraintLattice v1."""
-        violations: List[ConstraintViolation] = []
+        violations: list[ConstraintViolation] = []
         content_lower = thought_content.lower()
 
         for concept, data in FORBIDDEN_CONCEPT_CORPUS.items():
@@ -1062,7 +1063,7 @@ def _run_self_test() -> int:
             print(f"  {FAIL} VEC serialization failed: {exc}")
             failures += 1
     else:
-        print(f"  \033[93m[SKIP]\033[0m VEC test skipped (no violation generated — check mode)")
+        print("  \033[93m[SKIP]\033[0m VEC test skipped (no violation generated — check mode)")
 
     # ── LatticeFingerprint immutability ───────────────────────────────────
     fp2 = _compute_lattice_fingerprint()

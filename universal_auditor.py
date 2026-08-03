@@ -1,11 +1,10 @@
+import base64
+import hashlib
 import json
 import os
 import sys
-import hashlib
-import base64
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.exceptions import InvalidSignature
+
+from cryptography.hazmat.primitives import serialization
 
 # =========================================================
 # UNIVERSAL AUDITOR CLI (INDEPENDENT VERIFIER)
@@ -60,7 +59,7 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
         f"{contract_hash}|{runtime_state_hash}|{runtime_identity_hash}|"
         f"{output_commitment_hash}|{evidence_hash}|{summary_hash}|"
         f"{verdict_hash}|{deliberation_hash}"
-        .encode("utf-8")
+        .encode()
     ).hexdigest()
 
     if computed_root_hash != attestation.get("root_hash"):
@@ -76,17 +75,14 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
         evidence.get("hardware_attestations") or evidence.get("hardware_attestation", {})
     )
     fmt = hardware_attestation.get("format", "unknown")
-    quote_b64 = hardware_attestation.get("quote_base64", "") or (
-        hardware_attestation.get("quotes_base64", [None])[0]
-        if hardware_attestation.get("quotes_base64") else ""
-    )
+    # quote_b64 is not currently used by this snippet directly
     
     if fmt == "aws-nitro-cose":
-        print(f"  -> Detected AWS Nitro Enclave Quote")
+        print("  -> Detected AWS Nitro Enclave Quote")
     elif fmt == "intel-sgx-dcap":
-        print(f"  -> Detected Intel SGX DCAP Quote")
+        print("  -> Detected Intel SGX DCAP Quote")
     elif fmt == "amd-sev-snp":
-        print(f"  -> Detected AMD SEV-SNP Quote")
+        print("  -> Detected AMD SEV-SNP Quote")
     else:
         print(f"  -> Detected unknown quote format: {fmt}")
 
@@ -101,7 +97,7 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
     try:
         signature_bytes = base64.b64decode(attestation.get("attestation_signature", ""))
         public_key.verify(signature_bytes, attestation.get("root_hash").encode("utf-8"))
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         print(f"[ERROR] TEE Signature is INVALID or Malformed: {e}")
         sys.exit(1)
 
@@ -123,7 +119,7 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
                 print("[ERROR] ZK-SNARK Mathematical Soundness Check FAILED!")
                 sys.exit(1)
             print("  -> ZK-SNARK Proof Verified Successfully.")
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             print(f"[ERROR] Failed to verify ZK-SNARK: {e}")
             sys.exit(1)
 
@@ -170,12 +166,12 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
         print(f" Steps Verified : {dic.get('total_steps_verified')}")
         print(f" Genesis      : {dic.get('genesis_commitment')}")
         print(f" Final Chain  : {dic.get('final_commitment')}")
-        print("")
+        print()
         for chk in dic.get("checks", []):
             icon = "[OK]" if chk["passed"] else "[!!]"
             print(f" {icon} {chk['id']} {chk['check']}")
             print(f"      {chk['detail']}")
-        print("")
+        print()
         print(f" VERDICT: {dic.get('verdict')}")
         print("="*50)
         if dic.get("status") != "CERTIFIED" and verdict.get("status") == "PASS":

@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import List, Optional
 
-from pydantic_settings import BaseSettings
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -76,13 +75,13 @@ class Settings(BaseSettings):
     # ── Security ──────────────────────────────────────────────────
     API_KEYS_FILE: str = ""  # Path to JSON file with API keys; empty = no auth
     RATE_LIMIT_RPM: int = 30  # Requests per minute per API key
-    CORS_ORIGINS: List[str] = Field(default_factory=lambda: ["*"])
+    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
     MAX_PROMPT_LENGTH: int = 4096  # Characters
 
     # ── Worker / Inference ────────────────────────────────────────
     MODEL_PATH: str = "./models/models/qwen_0_5b"
     MODEL_ID: str = "qwen_0_5b"
-    ALLOWED_MODELS: List[str] = Field(default_factory=lambda: ["qwen_0_5b"])
+    ALLOWED_MODELS: list[str] = Field(default_factory=lambda: ["qwen_0_5b"])
     WORKER_TIMEOUT_SECONDS: int = 600  # Kill worker after this
     DEFAULT_MAX_TOKENS: int = 200
     DEFAULT_SEED: int = 42

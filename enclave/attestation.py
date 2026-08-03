@@ -8,10 +8,9 @@ Hardware mode:  Interfaces with AWS Nitro NSM (original behavior).
 
 import hashlib
 import json
+import logging
 import os
 import time
-import logging
-from typing import Optional
 
 logger = logging.getLogger("cgi.enclave")
 
@@ -25,7 +24,7 @@ class TEEAttestation:
     and hardware TEE (AWS Nitro) modes.
     """
 
-    def __init__(self, enclave_id: str, mode: Optional[str] = None):
+    def __init__(self, enclave_id: str, mode: str | None = None):
         self.enclave_id = enclave_id
         self.mode = mode or _ENCLAVE_MODE
 

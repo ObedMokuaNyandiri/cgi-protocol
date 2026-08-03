@@ -1,8 +1,9 @@
-import time
 import hashlib
-from typing import Dict, Any, Tuple
+import time
+from typing import Any
 
-def fetch_with_zktls(url: str, temporal_block_hash: str) -> Tuple[Dict[str, Any], str]:
+
+def fetch_with_zktls(url: str, temporal_block_hash: str) -> tuple[dict[str, Any], str]:
     """
     Simulates a Zero-Knowledge TLS (zk-TLS) fetch of an external API.
     In a real zk-TLS setup (like TLSNotary), the client proves that the data 
@@ -36,6 +37,6 @@ def fetch_with_zktls(url: str, temporal_block_hash: str) -> Tuple[Dict[str, Any]
     # Generate the cryptographic provenance hash (the proof)
     payload_str = str(data)
     # The proof mathematically binds the payload to the specific L1 blockhash
-    zktls_proof_hash = hashlib.sha256(f"zktls|{url}|{payload_str}|{temporal_block_hash}".encode("utf-8")).hexdigest()
+    zktls_proof_hash = hashlib.sha256(f"zktls|{url}|{payload_str}|{temporal_block_hash}".encode()).hexdigest()
     
     return data, zktls_proof_hash

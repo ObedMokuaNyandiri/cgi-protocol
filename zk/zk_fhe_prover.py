@@ -1,5 +1,5 @@
 import hashlib
-from typing import Dict, Any, Tuple
+from typing import Any
 
 # =========================================================
 # ZK-FHE WHISTLEBLOWER PROVER (CLIENT-SIDE)
@@ -13,7 +13,7 @@ def _compute_zkfhe_public_signals(fhe_ciphertext_hash: str, client_public_key_ha
     signal_data = f"{fhe_ciphertext_hash}|{client_public_key_hash}"
     return hashlib.sha256(signal_data.encode("utf-8")).hexdigest()
 
-def generate_zkfhe_fraud_proof(fhe_ciphertext: str, private_key: str, public_key: str, decrypted_plaintext: str) -> Tuple[Dict[str, Any], str]:
+def generate_zkfhe_fraud_proof(fhe_ciphertext: str, private_key: str, public_key: str, decrypted_plaintext: str) -> tuple[dict[str, Any], str]:
     """
     Simulates a client generating a ZK-SNARK that proves:
     1. They know `private_key` such that PublicKey(private_key) == public_key.

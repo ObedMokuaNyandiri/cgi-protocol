@@ -3,7 +3,12 @@ import os
 # Ensure the real circuit logic is enabled for the test
 os.environ["USE_REAL_ZK_CIRCUITS"] = "1"
 
-from zk_snark import generate_inference_proof, verify_inference_proof, _compute_public_signals
+from zk_snark import (
+    _compute_public_signals,
+    generate_inference_proof,
+    verify_inference_proof,
+)
+
 
 def test_generate_and_verify_halo2_proof():
     """
@@ -34,7 +39,7 @@ def test_halo2_proof_rejects_tampering():
     output_hash = "0x0000000000000000000000000000000000000000000000000000000000000002"
     new_root = "0x0000000000000000000000000000000000000000000000000000000000000003"
     
-    proof, public_signal = generate_inference_proof(previous_root, output_hash, new_root)
+    proof, _public_signal = generate_inference_proof(previous_root, output_hash, new_root)
     
     # Tamper with the public signal (e.g. an attacker tries to change the output_hash)
     tampered_output_hash = "0x9999999999999999999999999999999999999999999999999999999999999999"

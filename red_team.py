@@ -21,12 +21,11 @@ import json
 import os
 import sys
 import time
-from typing import Dict, Any, Tuple
+from typing import Any
 
 # Use the SDK for verification
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cgi_sdk import CGIAuditor, AuditOutcome
-
+from cgi_sdk import AuditOutcome, CGIAuditor
 
 # =========================================================
 # HELPERS
@@ -38,7 +37,7 @@ PASS = "[OK] PASS"
 FAIL = "[XX] FAIL"
 
 
-def load_clean_bundle() -> Tuple[Dict[str, Any], str]:
+def load_clean_bundle() -> tuple[dict[str, Any], str]:
     """Load the clean, canonical bundle and output text."""
     if not os.path.exists(BUNDLE_PATH):
         print(f"[ERROR] Run cgi_runtime.py first to generate {BUNDLE_PATH}")
@@ -52,7 +51,7 @@ def load_clean_bundle() -> Tuple[Dict[str, Any], str]:
     return bundle, output_text
 
 
-def run_test(name: str, bundle: Dict, output: str, expect_fail: bool = True) -> bool:
+def run_test(name: str, bundle: dict, output: str, expect_fail: bool = True) -> bool:
     """
     Run the SDK verifier on a (possibly tampered) bundle.
     Returns True if the test behaved as expected.
@@ -83,12 +82,12 @@ def run_test(name: str, bundle: Dict, output: str, expect_fail: bool = True) -> 
 # ATTACK SIMULATIONS
 # =========================================================
 
-def attack_0_baseline(bundle: Dict, output: str) -> bool:
+def attack_0_baseline(bundle: dict, output: str) -> bool:
     """Baseline: Verify the clean attestation passes before any attacks."""
     return run_test("[0] Baseline (clean attestation)", bundle, output, expect_fail=False)
 
 
-def attack_1_model_substitution(bundle: Dict, output: str) -> bool:
+def attack_1_model_substitution(bundle: dict, output: str) -> bool:
     """
     Model Substitution Attack:
     An adversarial provider swaps the model_id from 'qwen_0_5b' to 'gpt2' 
@@ -107,7 +106,7 @@ def attack_1_model_substitution(bundle: Dict, output: str) -> bool:
     )
 
 
-def attack_2_output_tampering(bundle: Dict, output: str) -> bool:
+def attack_2_output_tampering(bundle: dict, output: str) -> bool:
     """
     Output Tampering Attack:
     After the inference completes, an adversary modifies the decoupled
@@ -123,7 +122,7 @@ def attack_2_output_tampering(bundle: Dict, output: str) -> bool:
     )
 
 
-def attack_3_timestamp_forgery(bundle: Dict, output: str) -> bool:
+def attack_3_timestamp_forgery(bundle: dict, output: str) -> bool:
     """
     Timestamp Forgery Attack:
     An adversary backdates the started_at timestamp to impersonate a past 
@@ -141,7 +140,7 @@ def attack_3_timestamp_forgery(bundle: Dict, output: str) -> bool:
     )
 
 
-def attack_4_constraint_strip(bundle: Dict, output: str) -> bool:
+def attack_4_constraint_strip(bundle: dict, output: str) -> bool:
     """
     Constraint Strip Attack:
     An adversary strips enforced_constraints from runtime_state, attempting
@@ -158,7 +157,7 @@ def attack_4_constraint_strip(bundle: Dict, output: str) -> bool:
     )
 
 
-def attack_5_replay(bundle: Dict, output: str) -> bool:
+def attack_5_replay(bundle: dict, output: str) -> bool:
     """
     Replay Attack:
     An adversary submits an old, expired attestation as if it were freshly

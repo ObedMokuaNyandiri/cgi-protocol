@@ -1,16 +1,25 @@
-import json
-import time
 import base64
-import os
 import hashlib
+import json
+import os
+import sys
+import time
 import uuid
 
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec, ed25519
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, padding, rsa
 
-import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from contract import InferenceContract, ContractVersion, ExecutionClaims, ValidityRules, ContractParameters, TrustAssumptions, RequiredObligations, SemanticBounds
+from contract import (
+    ContractParameters,
+    ContractVersion,
+    ExecutionClaims,
+    InferenceContract,
+    RequiredObligations,
+    SemanticBounds,
+    TrustAssumptions,
+    ValidityRules,
+)
 
 print("[DEBUG] starting token generation")
 
@@ -51,7 +60,7 @@ claims = ExecutionClaims(
     network_policy="deny-all",
     tool_policy="no-external-tools",
     provenance="complete",
-    policy_hash=hashlib.sha256("ORGANIZATION_A_STRICT_POLICY_V1".encode("utf-8")).hexdigest()
+    policy_hash=hashlib.sha256(b"ORGANIZATION_A_STRICT_POLICY_V1").hexdigest()
 )
 
 validity = ValidityRules(
@@ -98,7 +107,7 @@ else:
 prompt_hash = hashlib.sha256(raw_prompt.encode("utf-8")).hexdigest()
 
 contract = InferenceContract(
-    execution_id=f"exec-{str(uuid.uuid4())}",
+    execution_id=f"exec-{uuid.uuid4()!s}",
     prompt_hash=prompt_hash,
     version=version,
     parameters=parameters,

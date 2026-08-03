@@ -12,16 +12,14 @@ Usage:
     print(auditor.report())       # Human-readable compliance report
 """
 
+import hashlib
 import json
 import os
 import sys
-import hashlib
-import base64
 import time
-from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
-
+from typing import Any
 
 # =========================================================
 # RESULT TYPES
@@ -77,7 +75,7 @@ class CGIAuditor:
         print(result.status)  # PASS / FAIL / UNDETERMINED
     """
 
-    def __init__(self, bundle: Dict[str, Any], output_text: Optional[str] = None):
+    def __init__(self, bundle: dict[str, Any], output_text: str | None = None):
         self._bundle = bundle
         self._output_text = output_text
         self._payload = bundle.get("payload", {})
@@ -88,7 +86,7 @@ class CGIAuditor:
     # ----------------------------------------------------------
 
     @classmethod
-    def from_file(cls, bundle_path: str, output_path: Optional[str] = None) -> "CGIAuditor":
+    def from_file(cls, bundle_path: str, output_path: str | None = None) -> "CGIAuditor":
         """Load an auditor from a portable_attestation.json file."""
         if not os.path.exists(bundle_path):
             raise FileNotFoundError(f"Attestation bundle not found: {bundle_path}")
@@ -106,7 +104,7 @@ class CGIAuditor:
         return cls(bundle=bundle, output_text=output_text)
 
     @classmethod
-    def from_dict(cls, bundle: Dict[str, Any], output_text: Optional[str] = None) -> "CGIAuditor":
+    def from_dict(cls, bundle: dict[str, Any], output_text: str | None = None) -> "CGIAuditor":
         """Load an auditor from an already-parsed dict."""
         return cls(bundle=bundle, output_text=output_text)
 
@@ -177,7 +175,7 @@ class CGIAuditor:
             checks.append(self._check(
                 "Decoupled Output Hash",
                 computed_output_hash == attested_output_hash,
-                f"Verifies inference_result.txt matches committed output_hash"
+                "Verifies inference_result.txt matches committed output_hash"
             ))
         else:
             warnings.append("inference_result.txt not provided -- output hash verification skipped.")
@@ -244,7 +242,7 @@ class CGIAuditor:
                 curve = zk_proof.get("curve", "unknown")
                 
                 # RECOMPUTE AND MATHEMATICALLY VERIFY ZK PROOF
-                from zk_snark import verify_inference_proof, _compute_public_signals
+                from zk_snark import _compute_public_signals, verify_inference_proof
                 
                 prompt_hash = contract_data.get("prompt_hash", "")
                 output_hash = computed_output_hash if self._output_text is not None else output_commitment.get("output_hash", "")
@@ -404,7 +402,7 @@ class CGIAuditor:
     # Report Generator
     # ----------------------------------------------------------
 
-    def report(self, result: Optional[AuditResult] = None) -> str:
+    def report(self, result: AuditResult | None = None) -> str:
         """
         Generate a human-readable compliance report from a verification result.
         Suitable for regulators, auditors, legal teams, and executives.

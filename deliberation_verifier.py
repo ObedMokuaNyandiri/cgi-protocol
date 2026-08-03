@@ -26,9 +26,8 @@ All checks must pass for the DIC to be issued.
 """
 
 import hashlib
-import json
 import time
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any
 
 from constraint_lattice import LATTICE_FINGERPRINT
 
@@ -41,7 +40,7 @@ class DeliberationVerifier:
 
     GENESIS_SEED = "SIP_V11_SOVEREIGN_INTELLIGENCE_PROTOCOL_GENESIS"
 
-    def verify(self, bundle: Dict[str, Any]) -> Dict[str, Any]:
+    def verify(self, bundle: dict[str, Any]) -> dict[str, Any]:
         """
         Fully verify the Sovereign Attestation Bundle.
         Returns a Deliberation Integrity Certificate (DIC).
@@ -63,7 +62,7 @@ class DeliberationVerifier:
         l0_violations      = deliberation.get("l0_violations", [])
         is_aligned         = deliberation.get("is_aligned", False)
 
-        checks: List[Dict] = []
+        checks: list[dict] = []
 
         # ── Check 1: Commitment Chain Integrity ───────────────────────────
         chain_ok, recomputed_final = self._verify_chain(genesis_commitment, steps)
@@ -160,40 +159,40 @@ class DeliberationVerifier:
     # ── Internal ──────────────────────────────────────────────────────────
 
     def _verify_chain(
-        self, genesis: str, steps: List[Dict]
-    ) -> Tuple[bool, str]:
+        self, genesis: str, steps: list[dict]
+    ) -> tuple[bool, str]:
         """Recompute the commitment chain and check the final commitment."""
         current = genesis
         for step in steps:
             content = step.get("thought_content", "")
             idx     = step.get("step_index", 0)
             current = hashlib.sha256(
-                f"{current}|{content}|{idx}".encode("utf-8")
+                f"{current}|{content}|{idx}".encode()
             ).hexdigest()
 
         recorded = steps[-1].get("commitment_hash", "") if steps else genesis
         return current == recorded, current
 
     def _verify_arp(
-        self, genesis: str, steps: List[Dict], arp: Dict
-    ) -> Tuple[bool, str]:
+        self, genesis: str, steps: list[dict], arp: dict
+    ) -> tuple[bool, str]:
         """Independently recompute the ARP and check the hash."""
         accumulator = genesis
         for step in steps:
             witness    = step.get("constraint_proof", {}).get("proof_witness", "")
             commitment = step.get("commitment_hash", "")
             accumulator = hashlib.sha256(
-                f"{accumulator}|{witness}|{commitment}".encode("utf-8")
+                f"{accumulator}|{witness}|{commitment}".encode()
             ).hexdigest()
 
         final = steps[-1].get("commitment_hash", "") if steps else genesis
         recomputed_arp_hash = hashlib.sha256(
-            f"ARP|{accumulator}|{final}|{len(steps)}".encode("utf-8")
+            f"ARP|{accumulator}|{final}|{len(steps)}".encode()
         ).hexdigest()
 
         return recomputed_arp_hash == arp.get("arp_hash", ""), recomputed_arp_hash
 
-    def _verify_vecs(self, steps: List[Dict]) -> Tuple[bool, str]:
+    def _verify_vecs(self, steps: list[dict]) -> tuple[bool, str]:
         """Verify the integrity of all VECs in the steps."""
         for step in steps:
             proof = step.get("constraint_proof", {})
@@ -245,13 +244,13 @@ class DeliberationVerifier:
 
     def _issue_certificate(
         self,
-        checks: List[Dict],
+        checks: list[dict],
         passed: bool,
-        reason: Optional[str],
-        steps: List,
+        reason: str | None,
+        steps: list,
         genesis: str,
         final: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Issue the Deliberation Integrity Certificate."""
         return {
             "protocol": "SIP_V11_DELIBERATION_INTEGRITY_CERTIFICATE",

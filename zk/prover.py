@@ -1,6 +1,7 @@
-import json
 import hashlib
+import json
 import time
+
 
 class ZKProver:
     """
@@ -20,14 +21,14 @@ class ZKProver:
         Because the Reducer is purely mathematical/deterministic, this proof is 
         100% immune to LLM hardware floating-point drift.
         """
-        print(f"[ZK] Generating SNARK proof for State Reducer execution...")
+        print("[ZK] Generating SNARK proof for State Reducer execution...")
         
         # Simulate proof generation time (zkVM execution)
         time.sleep(1)
         
         # A real SNARK proof mathematically guarantees:
         # StateReducer(previous_root, ActionPayload) == correct_new_root
-        proof_input = f"RSR:{previous_root}:{action_payload_hash}:{correct_new_root}".encode("utf-8")
+        proof_input = f"RSR:{previous_root}:{action_payload_hash}:{correct_new_root}".encode()
         simulated_pi = hashlib.sha256(proof_input).hexdigest()
         
         proof = {

@@ -14,6 +14,7 @@ if os.path.exists("outputs/portable_attestation.json"):
 # 2. Generate Auth Token
 print("\n[+] Generating FHE Auth Token & Encrypting Prompt...")
 from fhe_simulator import FHESimulator
+
 pub_key, priv_key = FHESimulator.generate_keys()
 raw_prompt = "AGENT_ACTION"
 encrypted_prompt = FHESimulator.encrypt(raw_prompt, pub_key)
@@ -34,6 +35,7 @@ print(" EIGEN-DA DATA DISPERSION")
 print("==================================================")
 print("[+] AI Operator bundles the Attestation and outputs into a Blob...")
 from eigenda_client import EigenDAClient
+
 da_client = EigenDAClient()
 
 with open("outputs/portable_attestation.json", "rb") as f:
@@ -45,7 +47,7 @@ blob_header_root, eigenda_proof = da_client.disperse_blob(blob_data)
 print("\n==================================================")
 print(" ON-CHAIN EXECUTION (CGI_Verifier.sol)")
 print("==================================================")
-print(f"[+] Submitting executeOptimistic() transaction...")
+print("[+] Submitting executeOptimistic() transaction...")
 print(f"  -> Blob Header Root : {blob_header_root}")
 print(f"  -> EigenDA Proof    : {eigenda_proof}")
 print("[SUCCESS] Smart Contract mathematically verified EigenDA Quorum Signature!")

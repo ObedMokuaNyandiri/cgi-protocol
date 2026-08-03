@@ -12,7 +12,6 @@ eth_keys/eth_utils are optional — only needed for EVM-compatible signatures.
 import ctypes
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger("cgi.nsm")
 
@@ -68,9 +67,10 @@ class NsmLib:
             return signature.to_bytes()
         except ImportError:
             # eth_keys not installed — use standard cryptography library
+            import hashlib
+
             from cryptography.hazmat.primitives import hashes as crypto_hashes
             from cryptography.hazmat.primitives.asymmetric import ec
-            import hashlib
 
             if not hasattr(self, '_std_priv_key'):
                 self._std_priv_key = ec.generate_private_key(ec.SECP256K1())

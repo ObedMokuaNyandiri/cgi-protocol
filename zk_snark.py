@@ -1,8 +1,8 @@
+import asyncio
 import hashlib
 import json
 import os
-import asyncio
-from typing import Dict, Any, Tuple
+from typing import Any
 
 try:
     import ezkl
@@ -34,7 +34,7 @@ VK_PATH = os.path.join(ARTIFACTS_DIR, "test.vk")
 SETTINGS_PATH = os.path.join(ARTIFACTS_DIR, "settings.json")
 
 
-def _generate_real_proof(public_signal: str) -> Dict[str, Any]:
+def _generate_real_proof(public_signal: str) -> dict[str, Any]:
     """
     Executes the actual Halo2 circuit via EZKL.
     Prerequisites:
@@ -79,12 +79,12 @@ def _generate_real_proof(public_signal: str) -> Dict[str, Any]:
         with open(proof_path, 'r') as f:
             proof = json.load(f)
         return proof
-    except BaseException as e:
+    except (FileNotFoundError, json.JSONDecodeError, RuntimeError, SystemError) as e:
         print(f"[WARNING] ezkl.prove failed: {e}")
         return _generate_mock_proof(public_signal)
 
 
-def _generate_mock_proof(public_signal: str) -> Dict[str, Any]:
+def _generate_mock_proof(public_signal: str) -> dict[str, Any]:
     # Mocking the mathematical structure of an EZKL proof
     return {
         "protocol": "halo2",
@@ -97,7 +97,7 @@ def _generate_mock_proof(public_signal: str) -> Dict[str, Any]:
     }
 
 
-def generate_inference_proof(previous_root: str, output_hash: str, new_root: str) -> Tuple[Dict[str, Any], str]:
+def generate_inference_proof(previous_root: str, output_hash: str, new_root: str) -> tuple[dict[str, Any], str]:
     """
     Generates a Halo2 zero-knowledge proof for a neural network forward pass using EZKL.
     If USE_REAL_CIRCUIT is set, calls out to the EZKL rust bindings.
@@ -112,7 +112,7 @@ def generate_inference_proof(previous_root: str, output_hash: str, new_root: str
     return _generate_mock_proof(public_signal), public_signal
 
 
-def verify_inference_proof(proof: Dict[str, Any], public_signal: str) -> bool:
+def verify_inference_proof(proof: dict[str, Any], public_signal: str) -> bool:
     """
     Mathematically verifies the zero-knowledge proof against the public signal.
     """
@@ -137,9 +137,6 @@ def verify_inference_proof(proof: Dict[str, Any], public_signal: str) -> bool:
 
         # Re-verify the mathematical binding (Mock validation)
         expected_proof = f"0x{hashlib.sha256((public_signal + 'proof_data').encode()).hexdigest()}"
-        if proof["proof"] != expected_proof:
-            return False
-            
-        return True
-    except BaseException:
+        return proof["proof"] == expected_proof
+    except (KeyError, TypeError, ValueError):
         return False

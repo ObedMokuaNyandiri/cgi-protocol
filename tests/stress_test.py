@@ -1,25 +1,33 @@
+import json
+import multiprocessing
 import os
 import sys
-import json
 import time
-import multiprocessing
-import subprocess
-import shutil
 
 # Ensure we can import the project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import base64
+import hashlib
+import uuid
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 
 from registry import AttestationRegistry
 
-import base64
-import uuid
-import hashlib
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec, ed25519
-
 # Ensure we can import the project modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from contract import InferenceContract, ContractVersion, ExecutionClaims, ValidityRules, ContractParameters, TrustAssumptions, RequiredObligations, SemanticBounds
+from contract import (
+    ContractParameters,
+    ContractVersion,
+    ExecutionClaims,
+    InferenceContract,
+    RequiredObligations,
+    SemanticBounds,
+    TrustAssumptions,
+    ValidityRules,
+)
 
 # ===================================================================
 # CGI PROTOCOL -- HIGH CONCURRENCY I/O STRESS TEST
@@ -102,7 +110,6 @@ def generate_mock_token(worker_id):
 
 def worker_task(worker_id):
     import unittest.mock
-    import sys
     try:
         # 1. Generate unique token for this worker
         token_path = generate_mock_token(worker_id)
@@ -126,12 +133,12 @@ def worker_task(worker_id):
                             except SystemExit as e:
                                 if e.code != 0:
                                     return False, f"Worker {worker_id} crashed with exit code {e.code}"
-                            except Exception as e:
-                                return False, f"Worker {worker_id} failed: {str(e)}"
+                            except (ValueError, TypeError, RuntimeError) as e:
+                                return False, f"Worker {worker_id} failed: {e!s}"
                                 
         return True, f"Worker {worker_id} finished successfully."
-    except Exception as e:
-        return False, f"Worker {worker_id} threw exception: {str(e)}"
+    except (ValueError, TypeError, RuntimeError) as e:
+        return False, f"Worker {worker_id} threw exception: {e!s}"
 
 def run_stress_test():
     print("=" * 60)

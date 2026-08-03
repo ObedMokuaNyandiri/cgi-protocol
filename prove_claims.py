@@ -1,7 +1,7 @@
-import subprocess
-import sys
 import json
 import os
+import subprocess
+import sys
 
 print("==================================================")
 print(" PROOF OF SECURITY FIXES (FLAW 6 & FLAW 7)")

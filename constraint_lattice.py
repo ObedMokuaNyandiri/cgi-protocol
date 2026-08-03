@@ -25,27 +25,27 @@ Severity Levels (unchanged):
 # ──────────────────────────────────────────────────────────────────────────────
 # Transparent re-export from v2 — zero changes required in any caller
 # ──────────────────────────────────────────────────────────────────────────────
-from constraint_lattice_v2 import (                   # noqa: F401
-    ViolationSeverity,
-    ConstraintViolation,
-    ViolationEvidenceCertificate,
-    ConstraintLattice,
-    LatticeUnavailableError,
-    LATTICE_FINGERPRINT,
+from constraint_lattice_v2 import (
     FORBIDDEN_CONCEPT_CORPUS,
-    EmbeddingEngine,
+    LATTICE_FINGERPRINT,
+    ConstraintLattice,
+    ConstraintViolation,
     DualModeScanner,
+    EmbeddingEngine,
+    LatticeUnavailableError,
+    ViolationEvidenceCertificate,
+    ViolationSeverity,
 )
 
 # Keep these available for any code that imported directly from this module
 __all__ = [
-    "ViolationSeverity",
-    "ConstraintViolation",
-    "ViolationEvidenceCertificate",
-    "ConstraintLattice",
-    "LatticeUnavailableError",
-    "LATTICE_FINGERPRINT",
     "FORBIDDEN_CONCEPT_CORPUS",
-    "EmbeddingEngine",
+    "LATTICE_FINGERPRINT",
+    "ConstraintLattice",
+    "ConstraintViolation",
     "DualModeScanner",
+    "EmbeddingEngine",
+    "LatticeUnavailableError",
+    "ViolationEvidenceCertificate",
+    "ViolationSeverity",
 ]

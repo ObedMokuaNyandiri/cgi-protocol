@@ -19,7 +19,7 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("cgi.ledger")
 
@@ -174,7 +174,7 @@ class AuditLedger:
                 )
                 return False
 
-    def get_attestation(self, execution_id: str) -> Optional[dict]:
+    def get_attestation(self, execution_id: str) -> dict | None:
         """Retrieve an attestation bundle by execution ID."""
         with self._connect() as conn:
             cursor = conn.cursor()
@@ -191,8 +191,8 @@ class AuditLedger:
         self,
         limit: int = 100,
         offset: int = 0,
-        classification: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        classification: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Export audit log entries for HIPAA compliance reporting.
         Returns metadata (no full bundles) to minimize data exposure.
@@ -232,7 +232,7 @@ class AuditLedger:
                 for row in rows
             ]
 
-    def count(self, classification: Optional[str] = None) -> int:
+    def count(self, classification: str | None = None) -> int:
         """Count total attestations, optionally filtered by classification."""
         with self._connect() as conn:
             cursor = conn.cursor()
@@ -254,10 +254,10 @@ class AuditLedger:
 # Backward compatibility — module-level functions for old code
 # ─────────────────────────────────────────────────────────────
 
-_default_ledger: Optional[AuditLedger] = None
+_default_ledger: AuditLedger | None = None
 
 
-def init_db(db_path: Optional[str] = None) -> AuditLedger:
+def init_db(db_path: str | None = None) -> AuditLedger:
     """Legacy init function — creates the default ledger singleton."""
     global _default_ledger
     if db_path is None:
@@ -287,7 +287,7 @@ def record_attestation(
     )
 
 
-def get_attestation(execution_id: str) -> Optional[dict]:
+def get_attestation(execution_id: str) -> dict | None:
     """Legacy function — delegates to the default ledger."""
     global _default_ledger
     if _default_ledger is None:

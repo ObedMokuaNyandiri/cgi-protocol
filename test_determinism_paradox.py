@@ -1,11 +1,11 @@
-import sys
-import json
 import hashlib
+import json
+import sys
 
 try:
-    from zk.prover import ZKProver
     from memory_manager import MemoryManager
     from state_reducer import StateReducer
+    from zk.prover import ZKProver
 except ImportError as e:
     print(f"Error loading modules: {e}")
     sys.exit(1)

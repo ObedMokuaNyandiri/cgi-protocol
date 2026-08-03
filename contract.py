@@ -1,7 +1,8 @@
-import json
 import hashlib
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict, field
+import json
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
 
 @dataclass
 class ContractVersion:
@@ -21,7 +22,7 @@ class ExecutionClaims:
 @dataclass
 class ValidityRules:
     max_clock_skew_ms: int = 5000
-    expires_after_timestamp: Optional[int] = None
+    expires_after_timestamp: int | None = None
 
 @dataclass
 class TrustAssumptions:
@@ -38,7 +39,7 @@ class ContractParameters:
     max_output_tokens: int
     temperature: float
     seed: int
-    required_data_sources: List[str] = field(default_factory=list)
+    required_data_sources: list[str] = field(default_factory=list)
     # Healthcare / HIPAA fields
     data_classification: str = "PUBLIC"     # PHI | PII | PUBLIC
     purpose_of_use: str = "TREATMENT"       # TREATMENT | PAYMENT | OPERATIONS | RESEARCH
@@ -57,11 +58,11 @@ class ContractParameters:
 @dataclass
 class RequiredObligations:
     zk_proof_required: bool = False
-    watermark_type: Optional[str] = None
+    watermark_type: str | None = None
 
 @dataclass
 class SemanticBounds:
-    allowed_intents: List[str] = field(default_factory=lambda: ["*"])
+    allowed_intents: list[str] = field(default_factory=lambda: ["*"])
     max_transaction_value: float = 0.0
     schema_strict_mode: bool = True
 
@@ -78,9 +79,9 @@ class InferenceContract:
                  claims: ExecutionClaims,
                  validity: ValidityRules,
                  trust_assumptions: TrustAssumptions,
-                 semantic_bounds: Optional[SemanticBounds] = None,
-                 obligations: Optional[RequiredObligations] = None,
-                 extensions: Optional[Dict[str, Any]] = None):
+                 semantic_bounds: SemanticBounds | None = None,
+                 obligations: RequiredObligations | None = None,
+                 extensions: dict[str, Any] | None = None):
         self.execution_id = execution_id
         self.prompt_hash = prompt_hash
         self.version = version
@@ -99,7 +100,7 @@ class InferenceContract:
         if not self.prompt_hash:
             raise ValueError("prompt_hash cannot be empty")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "execution_id": self.execution_id,
             "prompt_hash": self.prompt_hash,
@@ -120,7 +121,7 @@ class InferenceContract:
         return hashlib.sha256(self.serialize().encode("utf-8")).hexdigest()
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'InferenceContract':
+    def from_dict(cls, data: dict[str, Any]) -> 'InferenceContract':
         return cls(
             execution_id=data["execution_id"],
             prompt_hash=data["prompt_hash"],

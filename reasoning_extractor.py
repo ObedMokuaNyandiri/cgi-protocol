@@ -19,8 +19,6 @@ The key insight: a deceptive AI would have to produce different reasoning steps
 to justify a malicious output — and THOSE steps would trigger L0 violations.
 """
 
-import json
-from typing import List, Tuple, Optional
 
 
 class ReasoningExtractor:
@@ -33,15 +31,15 @@ class ReasoningExtractor:
         raw_output: str,
         prompt_context: str,
         contract_data: dict,
-        zktls_data: Optional[list] = None,
-    ) -> List[Tuple[int, str]]:
+        zktls_data: list | None = None,
+    ) -> list[tuple[int, str]]:
         """
         Extracts reasoning directly from the LLM's native <think>...</think> tags.
         This simulates an oblivious Deterministic Finite Automaton (DFA) string
         extraction circuit inside the FHE layer, avoiding plaintext JSON parsing.
         """
         import re
-        steps: List[Tuple[int, str]] = []
+        steps: list[tuple[int, str]] = []
         matches = re.finditer(r"<think>(.*?)</think>", raw_output, re.DOTALL)
         
         for idx, match in enumerate(matches):

@@ -1,6 +1,6 @@
-import sys
-import json
 import hashlib
+import json
+import sys
 
 try:
     from memory_manager import MemoryManager
@@ -64,7 +64,7 @@ prev_root_101, new_root_101, delta_101 = mem_manager.apply_action(payload_101)
 success, msg = mock_execute_optimistic(101, prev_root_101, new_root_101)
 
 if not success:
-    print(f"[SUCCESS] Smart Contract gracefully halted execution at Epoch 101.")
+    print("[SUCCESS] Smart Contract gracefully halted execution at Epoch 101.")
     print(f"  -> Reason: {msg}")
 else:
     print("[FAIL] Smart Contract did not halt execution.")
@@ -77,7 +77,7 @@ snapshot_bytes_100 = json.dumps(state_100, sort_keys=True, separators=(',', ':')
 
 success, msg = mock_checkpoint_archival_state(100, snapshot_bytes_100)
 if success:
-    print(f"[SUCCESS] Operator successfully checkpointed Epoch 100!")
+    print("[SUCCESS] Operator successfully checkpointed Epoch 100!")
     print(f"  -> {msg}")
     print(f"  -> L1 Calldata Size: {len(snapshot_bytes_100)} bytes")
 else:
@@ -87,8 +87,8 @@ else:
 print("\n--- PHASE 4: RESUMPTION ---")
 success, msg = mock_execute_optimistic(101, prev_root_101, new_root_101)
 if success:
-    print(f"[SUCCESS] Epoch 101 executed successfully. Agent unlocked!")
+    print("[SUCCESS] Epoch 101 executed successfully. Agent unlocked!")
 else:
-    print(f"[FAIL] Execution still halted.")
+    print("[FAIL] Execution still halted.")
 
 print("\n[SUCCESS] The AI Agent is immune to Data Eviction. Its memory is immortalized on Ethereum L1.")

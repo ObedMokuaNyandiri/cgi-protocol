@@ -1,11 +1,12 @@
-import json
 import base64
 import hashlib
-from enum import Enum
+import json
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from enum import Enum
+from typing import Any
+
+from canonical_hash import compute_canonical_root  # FIX FLAW-002
 from contract import InferenceContract
-from canonical_hash import compute_canonical_root, hash_component   # FIX FLAW-002
 
 try:
     import cbor2
@@ -13,7 +14,7 @@ except ImportError:
     cbor2 = None
 
 try:
-    from zk_snark import verify_inference_proof, _compute_public_signals
+    from zk_snark import _compute_public_signals, verify_inference_proof
 except ImportError:
     pass
 
@@ -25,21 +26,21 @@ class AuditStatus(Enum):
 @dataclass
 class VerificationResult:
     status: AuditStatus
-    failed_checks: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    failed_checks: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     assurance_level: str = "A1"
     contract: InferenceContract = None
-    runtime_state: Dict[str, Any] = None
+    runtime_state: dict[str, Any] = None
 
 class FormalVerifier:
-    def __init__(self, payload: Dict[str, Any], attestation: Dict[str, str], external_output: str, sidechannel_prompt: str = "", skip_attestation_checks: bool = False):
+    def __init__(self, payload: dict[str, Any], attestation: dict[str, str], external_output: str, sidechannel_prompt: str = "", skip_attestation_checks: bool = False):
         self.payload = payload
         self.attestation = attestation
         self.external_output = external_output
         self.sidechannel_prompt = sidechannel_prompt
         self.skip_attestation_checks = skip_attestation_checks
 
-    def _hash_component(self, comp: Dict[str, Any]) -> str:
+    def _hash_component(self, comp: dict[str, Any]) -> str:
         return hashlib.sha256(json.dumps(comp, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def verify_bounds_boolean(self) -> bool:
@@ -53,13 +54,13 @@ class FormalVerifier:
             json_str = re.sub(r"<think>.*?</think>", "", self.external_output, flags=re.DOTALL).strip()
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
-            print(f"[VERIFIER DEBUG] JSON error: {e}, payload: {repr(json_str)}")
+            print(f"[VERIFIER DEBUG] JSON error: {e}, payload: {json_str!r}")
             return False
             
         contract_data = self.payload.get("contract", {})
         try:
             contract = InferenceContract.from_dict(contract_data)
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             return False
             
         max_val = getattr(contract.semantic_bounds, "max_transaction_value", float('inf'))
@@ -74,10 +75,7 @@ class FormalVerifier:
         if math.isnan(quantity) or math.isinf(quantity):
             return False
             
-        if quantity < 0 or quantity > max_val:
-            return False
-            
-        return True
+        return not (quantity < 0 or quantity > max_val)
 
     def verify(self) -> VerificationResult:
         if not self.payload:
@@ -88,7 +86,7 @@ class FormalVerifier:
         contract_data = self.payload.get("contract", {})
         try:
             contract = InferenceContract.from_dict(contract_data)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             return VerificationResult(status=AuditStatus.FAIL, failed_checks=[f"Invalid contract format: {e}"])
             
         assurance_level_str = getattr(contract.version, "assurance_level", "A1")
@@ -106,7 +104,6 @@ class FormalVerifier:
         runtime_identity = self.payload.get("runtime_identity", {})
         output_commitment = self.payload.get("output_commitment", {})
         evidence = self.payload.get("evidence", {})
-        summary = self.payload.get("generation_summary", {})
 
         # A1: Canonical Root Binding
         # FIX FLAW-002: Use shared canonical root computation.
@@ -167,7 +164,7 @@ class FormalVerifier:
 
                         if pcr0.hex() != runtime_identity.get("enclave_measurement"):
                             result.failed_checks.append("Hardware PCR0 does not match stated runtime measurement.")
-                    except Exception as e:
+                    except (ValueError, TypeError, KeyError) as e:
                         result.failed_checks.append(f"Hardware Quote Invalid: {e}")
 
                     
@@ -201,7 +198,7 @@ class FormalVerifier:
                             result.failed_checks.append("ZK-SNARK public signal mismatch! Output or prompt was tampered.")
                         elif not verify_inference_proof(zk_proof, zk_public_signal):
                             result.failed_checks.append("ZK-SNARK mathematical proof failed.")
-                except Exception as e:
+                except (ValueError, TypeError, KeyError) as e:
                     result.failed_checks.append(f"Error during ZK verification: {e}")
 
         # A5: Explicit Claims evaluation (Privacy/Reproducibility)

@@ -1,6 +1,6 @@
-import urllib.request
-import urllib.error
 import json
+import urllib.error
+import urllib.request
 
 API_KEY = "5d3e723cd0ab90a581e179f8d2cd13ec6af7ea3e6c26c3c56d36c1af22a52ded"
 

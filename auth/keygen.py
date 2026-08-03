@@ -66,11 +66,11 @@ def generate_governance_keys(auth_dir: str = None) -> None:
     )
     fingerprint = hashlib.sha256(pub_der).hexdigest()
 
-    print(f"\n[OK] Governance key pair generated:")
+    print("\n[OK] Governance key pair generated:")
     print(f"  Private: {priv_path}")
     print(f"  Public:  {pub_path}")
     print(f"  Fingerprint: {fingerprint}")
-    print(f"\n[!] NEVER commit private_key.pem to source control!")
+    print("\n[!] NEVER commit private_key.pem to source control!")
 
 
 def generate_api_key(organization: str = "default") -> None:
@@ -103,16 +103,16 @@ def generate_api_key(organization: str = "default") -> None:
     with open(keys_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-    print(f"\n[OK] API key generated:")
+    print("\n[OK] API key generated:")
     print(f"  Key ID:       {key_id}")
     print(f"  Organization: {organization}")
-    print(f"  Scopes:       infer, audit")
-    print(f"")
+    print("  Scopes:       infer, audit")
+    print()
     print(f"  +{'=' * 68}+")
     print(f"  |  API KEY: {raw_key}  |")
     print(f"  +{'=' * 68}+")
-    print(f"")
-    print(f"  Save this key NOW — it will not be shown again!")
+    print()
+    print("  Save this key NOW — it will not be shown again!")
     print(f"  Use it in requests: curl -H 'X-API-Key: {raw_key}' ...")
 
 

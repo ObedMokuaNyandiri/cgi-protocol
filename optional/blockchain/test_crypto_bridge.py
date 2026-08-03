@@ -1,8 +1,8 @@
-import os
-import sys
-import json
 import base64
 import hashlib
+import json
+import os
+import sys
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
@@ -71,13 +71,13 @@ def main():
         except Exception:
             continue
             
-    print(f"\n[3] ECRECOVER SIMULATION")
+    print("\n[3] ECRECOVER SIMULATION")
     print(f"    Input Hash : 0x{payload_hash_hex}")
     print(f"    Input r    : 0x{r:064x}")
     print(f"    Input s    : 0x{s:064x}")
     print(f"    Input v    : {found_v}")
     
-    print(f"\n[4] VERIFICATION VERDICT")
+    print("\n[4] VERIFICATION VERDICT")
     print(f"    Expected Signer : {expected_address}")
     print(f"    Recovered Signer: {recovered_address}")
     

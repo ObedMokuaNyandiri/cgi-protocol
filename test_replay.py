@@ -1,7 +1,6 @@
+import json
 import subprocess
 import sys
-import json
-import os
 
 print("--- REPLAY ATTACK TEST ---")
 # 1. Generate a token

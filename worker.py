@@ -1,12 +1,12 @@
+import hashlib
+import json
+import os
 import sys
 import time
+
 import torch
 import torch.nn.functional as F
-import hashlib
-import os
-import json
-from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
-
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 # =========================================================
 # CANONICAL MODEL IDENTIFIER (REQUIRED FOR RUNTIME VERIFY)
@@ -209,7 +209,7 @@ def apply_cryptographic_watermark(logits, generated, execution_id="default", wat
     prev_tokens = tuple(generated[0][-5:].tolist())
     
     # Hash previous context + execution ID to get a deterministic pseudo-random seed
-    hash_input = f"{execution_id}_{prev_tokens}".encode("utf-8")
+    hash_input = f"{execution_id}_{prev_tokens}".encode()
     seed_int = int(hashlib.sha256(hash_input).hexdigest()[:8], 16)
     
     # Create deterministic generator
@@ -273,7 +273,7 @@ for step in range(min(epoch_limit, output_limit)):
         if step >= len(mock_tokens):
             if is_fhe_mode:
                 next_token_item = 0
-                output_token = f"fhe_{''.encode('utf-8').hex()}"
+                output_token = f"fhe_{b''.hex()}"
             else:
                 stop_reason = "eos"
                 break
@@ -283,7 +283,7 @@ for step in range(min(epoch_limit, output_limit)):
             output_token = f"fhe_{token_text.encode('utf-8').hex()}" if is_fhe_mode else token_text
             generated = torch.cat([generated, mock_tokens[step].unsqueeze(0).unsqueeze(0).to(device)], dim=1)
             
-        print(f"[TOKEN] step={step} id={next_token_item} text={repr(output_token)}", flush=True)
+        print(f"[TOKEN] step={step} id={next_token_item} text={output_token!r}", flush=True)
         time.sleep(0.01)
         continue
 
@@ -340,12 +340,12 @@ for step in range(min(epoch_limit, output_limit)):
     if is_fhe_mode:
         encrypted_token = f"fhe_{token_text.encode('utf-8').hex()}"
         print(
-            f"[TOKEN] step={step} id={next_token.item()} text={repr(encrypted_token)}",
+            f"[TOKEN] step={step} id={next_token.item()} text={encrypted_token!r}",
             flush=True
         )
     else:
         print(
-            f"[TOKEN] step={step} id={next_token.item()} text={repr(token_text)}",
+            f"[TOKEN] step={step} id={next_token.item()} text={token_text!r}",
             flush=True
         )
 
@@ -384,7 +384,7 @@ for step in range(min(epoch_limit, output_limit)):
         next_token_item = 0
         token_text = ""
         encrypted_token = f"fhe_{token_text.encode('utf-8').hex()}"
-        print(f"[TOKEN] step={step+1} id={next_token_item} text={repr(encrypted_token)}", flush=True)
+        print(f"[TOKEN] step={step+1} id={next_token_item} text={encrypted_token!r}", flush=True)
         continue
 
     # -----------------------------------------------------
@@ -408,6 +408,9 @@ for step in range(min(epoch_limit, output_limit)):
 print(f"[WORKER_STOP] reason={stop_reason or 'limit_reached'}", flush=True)
 print("[EPOCH_END] wiping_state", flush=True)
 
+import logging
+
+logger = logging.getLogger(__name__)
 try:
     del outputs
     del past_key_values
@@ -416,8 +419,8 @@ try:
     del model
     del input_ids
     del inputs
-except Exception:
-    pass
+except NameError as e:
+    logger.debug("Cleanup skip: %s", e)
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()

@@ -1,10 +1,9 @@
-import json
-import time
 import base64
+import json
 import os
+import time
 
 from cryptography.hazmat.primitives import serialization
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

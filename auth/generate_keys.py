@@ -1,5 +1,5 @@
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 private_key = Ed25519PrivateKey.generate()
 public_key = private_key.public_key()

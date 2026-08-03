@@ -8,11 +8,9 @@ Hardware mode:  Validates CBOR/COSE attestation from Nitro NSM.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger("cgi.kms")
 
@@ -31,7 +29,7 @@ class RemoteKMS:
     In hardware mode: validates CBOR/COSE Nitro attestation.
     """
 
-    def __init__(self, expected_measurement: str, mode: Optional[str] = None):
+    def __init__(self, expected_measurement: str, mode: str | None = None):
         self.expected_measurement = expected_measurement
         self.mode = mode or _ENCLAVE_MODE
 

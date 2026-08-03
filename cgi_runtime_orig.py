@@ -1,27 +1,16 @@
-import subprocess
-import json
+import base64
 import hashlib
+import json
 import os
 import time
-import sys
-import base64
-import tempfile
 
-from auth.verify_token import verify_token, get_token
 from cryptography.hazmat.primitives import serialization
-from merkle import MerkleTree
+
 from contract import InferenceContract
-from zktls_fetcher import fetch_with_zktls
-from enclave.key_release import RemoteKMS
 from enclave.attestation import TEEAttestation
-from zk_snark import generate_inference_proof
-from verifier import FormalVerifier
-from registry import AttestationRegistry
-from zkcot_engine import ZkCoTEngine, FatalConstraintViolation
-from constraint_lattice import ConstraintLattice
-from reasoning_extractor import ReasoningExtractor
-from canonical_hash import compute_canonical_root, compute_component_hashes, hash_component
-from filelock import FileLock
+from enclave.key_release import RemoteKMS
+from merkle import MerkleTree
+
 
 # =========================================================
 # KMS INTEGRATION
@@ -103,7 +92,6 @@ def parse_and_validate_contract(token_payload) -> InferenceContract:
     return contract
 
 def generate_portable_attestation(contract: InferenceContract, output_text: str, token_count: int, step_count: int, termination_reason: str, prompt: str, started_at: float, zktls_proofs: list = None, deliberation_transcript=None, optimistic: bool = False):
-    import base64
     print("[ATTESTATION] Generating Portable Attestation Bundle (v3)...")
     if optimistic:
         print("[ATTESTATION] OPTIMISTIC MODE: Bypassing initial ZK-SNARK generation for low latency.")

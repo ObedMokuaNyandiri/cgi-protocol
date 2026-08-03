@@ -1,6 +1,7 @@
 import os
-import time
 import random
+import time
+
 
 class FileLock:
     def __init__(self, lock_file, timeout=10):

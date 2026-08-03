@@ -1,5 +1,5 @@
 import json
-import hashlib
+
 
 class ZKVerifier:
     """
@@ -8,7 +8,7 @@ class ZKVerifier:
     deployed on Ethereum, or a rust-based verifier in the audit plane.
     """
     
-    def __init__(self, verification_key_path: str = None):
+    def __init__(self, verification_key_path: str | None = None):
         self.verification_key_path = verification_key_path
         
     def verify(self, proof_dict: dict, model_id: str, expected_seed: int) -> bool:
@@ -47,6 +47,6 @@ def verify_proof_file(filepath: str, model_id: str, seed: int) -> bool:
             proof = json.load(f)
         verifier = ZKVerifier()
         return verifier.verify(proof, model_id, seed)
-    except Exception as e:
+    except (FileNotFoundError, ValueError, TypeError) as e:
         print(f"[ZK-VERIFIER] Failed to load or verify proof: {e}")
         return False

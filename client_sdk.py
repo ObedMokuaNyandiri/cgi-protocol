@@ -1,11 +1,12 @@
-import sys
-import json
 import base64
 import hashlib
+import json
+import sys
+
 import requests
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 API_URL = "http://localhost:8000"
 
@@ -46,8 +47,7 @@ def verify_attestation(bundle: dict, public_key: ec.EllipticCurvePublicKey) -> b
     expected_hash = hashlib.sha256(payload_json).hexdigest()
     
     provided_hash = attestation.get("root_hash", "")
-    if provided_hash.startswith("0x"):
-        provided_hash = provided_hash[2:]
+    provided_hash = provided_hash.removeprefix("0x")
         
     if expected_hash != provided_hash:
         print(f"[!] FAILED: Root hash mismatch!\nExpected: {expected_hash}\nProvided: {provided_hash}")

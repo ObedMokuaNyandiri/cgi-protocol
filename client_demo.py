@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+
 from fhe_simulator import FHESimulator
 
 print("==================================================")
@@ -30,7 +31,7 @@ print(f"[CLIENT] Encrypted Prompt Commitment: {encrypted_prompt.get_commitment()
 sidechannel_path = "auth/prompt_sidechannel.txt"
 with open(sidechannel_path, "w", encoding="utf-8") as f:
     f.write(json.dumps(encrypted_prompt.serialize()))
-print(f"[CLIENT] Sent FHE Ciphertext to Enclave Sidechannel.")
+print("[CLIENT] Sent FHE Ciphertext to Enclave Sidechannel.")
 
 # 4. We still need a valid epoch token, so we generate one.
 print("\n[SYSTEM] Generating Auth Token...")

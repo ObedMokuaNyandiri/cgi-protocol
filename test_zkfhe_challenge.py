@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 import time
-import hashlib
+
 from zk.zk_fhe_prover import generate_zkfhe_fraud_proof
 
 print("==================================================")
@@ -16,6 +16,7 @@ if os.path.exists("outputs/portable_attestation.json"):
 # 2. Setup FHE Request
 print("\n[+] Generating FHE Auth Token & Encrypting Prompt...")
 from fhe_simulator import FHESimulator
+
 pub_key, priv_key = FHESimulator.generate_keys()
 
 # The client sends a prompt that is DESIGNED to trigger a malicious state if the operator bypasses constraints

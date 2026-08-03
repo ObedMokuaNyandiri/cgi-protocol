@@ -30,15 +30,14 @@ import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any
 
 import uvicorn
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 
 from config import settings
 from middleware import (
@@ -75,11 +74,11 @@ logger = logging.getLogger("cgi.gateway")
 
 class AppState:
     """Holds loaded keys and singletons for the app lifetime."""
-    private_key: Optional[ec.EllipticCurvePrivateKey] = None
+    private_key: ec.EllipticCurvePrivateKey | None = None
     public_key_pem: str = ""
-    ledger: Optional[AuditLedger] = None
-    registry: Optional[AttestationRegistry] = None
-    merkle_tree: Optional[MerkleTree] = None
+    ledger: AuditLedger | None = None
+    registry: AttestationRegistry | None = None
+    merkle_tree: MerkleTree | None = None
 
 
 app_state = AppState()
@@ -320,7 +319,7 @@ def run_inference(req: InferenceRequest, request: Request):
 
     replay_file = settings.REPLAY_FILE
     with FileLock(replay_file + ".lock", timeout=10):
-        cache: Dict[str, float] = {}
+        cache: dict[str, float] = {}
         if os.path.exists(replay_file):
             try:
                 with open(replay_file, "r") as f:
@@ -403,7 +402,7 @@ def run_inference(req: InferenceRequest, request: Request):
     )
 
     # ── 6. Build attestation bundle ───────────────────────────
-    execution_metrics: Dict[str, Any] = {
+    execution_metrics: dict[str, Any] = {
         "wall_duration_ms": wall_ms,
         "tokens_generated": token_count,
         "stop_reason": stop_reason,
@@ -411,7 +410,7 @@ def run_inference(req: InferenceRequest, request: Request):
         "enclave_mode": settings.ENCLAVE_MODE,
     }
 
-    bundle: Dict[str, Any] = {
+    bundle: dict[str, Any] = {
         "schema_version": "cgi-attestation-v3.1",
         "payload": {
             "contract": contract.to_dict(),
@@ -494,7 +493,7 @@ def export_audit_log(
     request: Request,
     limit: int = 100,
     offset: int = 0,
-    classification: Optional[str] = None,
+    classification: str | None = None,
 ):
     """
     Export audit log entries for HIPAA compliance reporting.

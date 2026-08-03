@@ -1,5 +1,6 @@
-import sys
 import json
+import sys
+
 try:
     from memory_manager import MemoryManager
 except ImportError as e:
@@ -47,9 +48,9 @@ def mock_execute_optimistic(previous_root, new_root):
 
 # Simulate Epoch 1 submission
 if mock_execute_optimistic(prev_root_1, new_root_1):
-    print(f"[SUCCESS] Epoch 1 State Continuation Accepted.")
+    print("[SUCCESS] Epoch 1 State Continuation Accepted.")
 else:
-    print(f"[FAIL] Epoch 1 rejected.")
+    print("[FAIL] Epoch 1 rejected.")
 
 print("\n--- TEST 2: State Rollback Attack (Amnesia Injection) ---")
 print("[ATTACKER] Attempting to roll back state to Epoch 1 (Portfolio = 1,050,000) to erase the Epoch 2 loss...")
@@ -59,15 +60,15 @@ attacker_prev_root = prev_root_1
 attacker_new_root = new_root_2
 
 if not mock_execute_optimistic(attacker_prev_root, attacker_new_root):
-    print(f"[SUCCESS] Smart Contract Rejected State Rollback!")
+    print("[SUCCESS] Smart Contract Rejected State Rollback!")
     print(f"  -> Reason: Submitted previousMemoryRoot ({attacker_prev_root[:10]}...) does not match on-chain root ({on_chain_root[:10]}...).")
 else:
-    print(f"[FAIL] Smart Contract allowed Rollback!")
+    print("[FAIL] Smart Contract allowed Rollback!")
 
 print("\n--- TEST 3: Valid Epoch 2 Submission ---")
 if mock_execute_optimistic(prev_root_2, new_root_2):
-    print(f"[SUCCESS] Epoch 2 State Continuation Accepted.")
+    print("[SUCCESS] Epoch 2 State Continuation Accepted.")
 else:
-    print(f"[FAIL] Epoch 2 rejected.")
+    print("[FAIL] Epoch 2 rejected.")
 
 print("\n[SUCCESS] The AI Agent now possesses Infinite Persistent Memory with O(1) ZK Verification Cost.")

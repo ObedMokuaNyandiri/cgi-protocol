@@ -277,7 +277,8 @@ def record_attestation(
     """Legacy function — delegates to the default ledger."""
     global _default_ledger
     if _default_ledger is None:
-        init_db()
+        _default_ledger = init_db()
+    assert _default_ledger is not None
     return _default_ledger.record_attestation(
         execution_id=execution_id,
         root_hash=root_hash,
@@ -291,7 +292,8 @@ def get_attestation(execution_id: str) -> dict | None:
     """Legacy function — delegates to the default ledger."""
     global _default_ledger
     if _default_ledger is None:
-        init_db()
+        _default_ledger = init_db()
+    assert _default_ledger is not None
     return _default_ledger.get_attestation(execution_id)
 
 

@@ -1,8 +1,9 @@
-import os
 import json
-import torch
-import torch.nn as nn
+import os
+
 import ezkl
+import torch
+from torch import nn
 
 # ===================================================================
 # CGI PROTOCOL -- ZK-ML EZKL CIRCUIT COMPILATION SCRIPT
@@ -23,7 +24,7 @@ import ezkl
 # -------------------------------------------------------------------
 class MockCGILayer(nn.Module):
     def __init__(self, input_dim=64, hidden_dim=128, vocab_size=512):
-        super(MockCGILayer, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc1.weight.data.normal_(0, 0.01)
         self.fc1.bias.data.zero_()
@@ -136,6 +137,7 @@ async def main():
             model=compiled_model_path,
             vk_path=vk_path,
             pk_path=pk_path,
+            srs_path=srs_path,
         )
         if hasattr(res, '__await__'):
             await res

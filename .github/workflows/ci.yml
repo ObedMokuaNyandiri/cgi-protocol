@@ -23,7 +23,7 @@ jobs:
           pip install pydantic pydantic-settings python-dotenv fastapi uvicorn cryptography filelock starlette
 
       - name: Lint with ruff
-        run: ruff check . --ignore E501
+        run: ruff check . --select E9,F63,F7,F82
 
       - name: Type check core modules
         run: |

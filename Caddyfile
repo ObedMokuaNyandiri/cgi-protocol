@@ -1,0 +1,34 @@
+# CGI Protocol — Caddy Reverse Proxy Configuration
+# =================================================
+# Automatic HTTPS via Let's Encrypt (free TLS certificates).
+#
+# USAGE:
+#   1. Replace YOUR_DOMAIN with your actual domain (e.g., api.cgi-protocol.com)
+#   2. Point your domain's DNS A record to your server's IP
+#   3. docker-compose up -d
+#
+# If you don't have a domain, replace the domain line with:
+#   :443
+# and Caddy will generate a self-signed certificate.
+
+# ── Option A: With a domain (recommended for production) ────
+# Uncomment and replace YOUR_DOMAIN:
+# YOUR_DOMAIN {
+#     reverse_proxy cgi-gateway:8000
+#     header {
+#         Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+#         X-Content-Type-Options nosniff
+#         X-Frame-Options DENY
+#         Referrer-Policy strict-origin-when-cross-origin
+#     }
+# }
+
+# ── Option B: Without a domain (self-signed cert) ──────────
+:80 {
+    reverse_proxy cgi-gateway:8000
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

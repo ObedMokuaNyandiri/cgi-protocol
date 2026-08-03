@@ -1,0 +1,54 @@
+# ── Git & VCS ─────────────────────────
+.git
+.github
+.gitignore
+
+# ── Python ────────────────────────────
+__pycache__
+*.pyc
+venv/
+.venv/
+
+# ── Development ───────────────────────
+*.md
+*.txt
+!requirements.txt
+!requirements-worker.txt
+.env
+.env.example
+.agents/
+
+# ── Models (mounted as volume) ────────
+models/
+
+# ── Test & Debug ──────────────────────
+tests/
+test_*.py
+benchmark.py
+corrupt_sig.py
+forensics.py
+red_team.py
+run_demo.py
+cgi_demo.py
+client_demo.py
+self_test_log.txt
+test.onnx
+
+# ── Data (mounted as volume) ──────────
+data/
+outputs/
+logs/
+*.db
+
+# ── Release artifacts ─────────────────
+*.zip
+CGI-Protocol-Release.zip
+
+# ── Blockchain (optional) ────────────
+contracts/
+script/
+foundry.toml
+CGI_Verifier.sol
+
+# ── Infrastructure ────────────────────
+infrastructure/

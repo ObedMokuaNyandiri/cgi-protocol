@@ -1,0 +1,82 @@
+name: CGI Protocol CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy
+          pip install pydantic pydantic-settings python-dotenv fastapi uvicorn cryptography filelock starlette
+
+      - name: Lint with ruff
+        run: ruff check . --ignore E501
+
+      - name: Type check core modules
+        run: |
+          mypy --ignore-missing-imports config.py middleware.py ledger.py contract.py
+
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: lint-and-type-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t cgi-protocol:ci-${{ github.sha }} .
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: build-docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install test dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      - name: Create required directories
+        run: |
+          mkdir -p auth outputs logs data
+
+      - name: Run smoke tests
+        run: |
+          # Test config module loads
+          python -c "from config import settings; print(f'Config OK: {settings.API_VERSION}')"
+
+          # Test ledger initializes
+          python -c "from ledger import AuditLedger; l = AuditLedger('data/test.db'); print(f'Ledger OK: {l.count()} records'); l.close()"
+
+          # Test contract model
+          python -c "
+          from contract import ContractParameters
+          p = ContractParameters(model_id='test', max_output_tokens=100, temperature=0.8, seed=42, data_classification='PHI')
+          print(f'Contract OK: classification={p.data_classification}')
+          "
+
+          # Test middleware
+          python -c "
+          from middleware import APIKeyStore, RateLimiter
+          rl = RateLimiter(max_requests=10)
+          assert rl.is_allowed('test')
+          print('Middleware OK')
+          "

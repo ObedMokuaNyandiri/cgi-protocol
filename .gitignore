@@ -1,0 +1,46 @@
+# ── Python ────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+
+# ── Secrets & Keys ────────────────────
+auth/private_key.pem
+auth/public_key.pem
+auth/api_keys.json
+.env
+
+# ── Data (generated at runtime) ───────
+data/
+outputs/
+logs/
+*.db
+*.db-wal
+*.db-shm
+
+# ── IDE ───────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Release artifacts ─────────────────
+*.zip
+*.tar.gz
+
+# ── Models (large binaries) ──────────
+models/models/
+
+# ── Test artifacts ────────────────────
+test.onnx
+self_test_log.txt

@@ -1,0 +1,41 @@
+# Use official Ubuntu 22.04 LTS image as the base to bypass PyO3 Windows threading panics
+FROM ubuntu:22.04
+
+# Avoid tzdata interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update and install required system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-venv \
+    python3.11-dev \
+    python3-pip \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Map python to python3.11
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirement list first to leverage Docker cache
+COPY requirements.txt .
+
+# Install dependencies, prioritizing the exact EZKL version
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir ezkl==23.0.5 onnx torch
+
+# Create the internal artifacts directory
+RUN mkdir -p /app/circuits/ezkl_artifacts
+
+# Copy the actual AI models and the compilation script
+COPY cgi/ /app/cgi/
+COPY circuits/compile_ezkl_circuit.py /app/circuits/compile_ezkl_circuit.py
+
+# When the container is run, execute the compilation script.
+# The artifacts directory MUST be volume mounted so the files persist to the host.
+CMD ["python", "circuits/compile_ezkl_circuit.py"]

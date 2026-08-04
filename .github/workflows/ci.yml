@@ -69,7 +69,7 @@ jobs:
           # Test contract model
           python -c "
           from contract import ContractParameters
-          p = ContractParameters(model_id='test', max_output_tokens=100, temperature=0.8, seed=42, data_classification='PHI')
+          p = ContractParameters(model_id='test', max_output_tokens=100, temperature=0.8, seed=42, data_classification='CONFIDENTIAL')
           print(f'Contract OK: classification={p.data_classification}')
           "
 

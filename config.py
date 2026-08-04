@@ -87,11 +87,11 @@ class Settings(BaseSettings):
     DEFAULT_SEED: int = 42
     DEFAULT_TEMPERATURE: float = 0.8
 
-    # ── Healthcare / HIPAA ────────────────────────────────────────
-    DEFAULT_DATA_CLASSIFICATION: str = "PUBLIC"  # PHI | PII | PUBLIC
-    AUDIT_RETENTION_DAYS: int = 2190  # 6 years for HIPAA
-    ENABLE_PHI_ENCRYPTION: bool = False  # Enable AES-256-GCM for PHI fields
-    PHI_ENCRYPTION_KEY: str = ""  # 32-byte hex key for PHI encryption
+    # ── Audit & Security ──────────────────────────────────────────
+    DEFAULT_DATA_CLASSIFICATION: str = "PUBLIC"  # CONFIDENTIAL | PII | PUBLIC
+    AUDIT_RETENTION_DAYS: int = 2190  # 6 years default retention
+    ENABLE_SENSITIVE_ENCRYPTION: bool = False  # Enable AES-256-GCM for sensitive fields
+    SENSITIVE_ENCRYPTION_KEY: str = ""  # 32-byte hex key for sensitive data encryption
 
     # ── Enclave / Attestation ─────────────────────────────────────
     ENCLAVE_MODE: str = "software"  # "software" | "nitro"

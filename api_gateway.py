@@ -10,7 +10,7 @@ Key changes from v1:
   - ADDED:   API key authentication + rate limiting
   - ADDED:   Worker subprocess timeout
   - ADDED:   /health endpoint for Docker/GCP health checks
-  - ADDED:   /v1/audit/export for HIPAA audit log retrieval
+  - ADDED:   /v1/audit/export for audit log retrieval
   - ADDED:   Structured logging
   - ADDED:   Input validation (prompt length, model whitelist)
   - ADDED:   Request ID tracing
@@ -197,7 +197,7 @@ class InferenceRequest(BaseModel):
     model_id: str = Field(default=settings.MODEL_ID)
     max_tokens: int = Field(default=settings.DEFAULT_MAX_TOKENS, ge=1, le=2048)
     data_classification: str = Field(default=settings.DEFAULT_DATA_CLASSIFICATION)
-    purpose_of_use: str = Field(default="TREATMENT")
+    purpose_of_use: str = Field(default="GENERAL")
 
 
 class HealthResponse(BaseModel):
@@ -249,10 +249,10 @@ def run_inference(req: InferenceRequest, request: Request):
             detail=f"Model '{req.model_id}' not allowed. Available: {settings.ALLOWED_MODELS}",
         )
 
-    if req.data_classification not in ("PHI", "PII", "PUBLIC"):
+    if req.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC"):
         raise HTTPException(
             status_code=400,
-            detail="data_classification must be one of: PHI, PII, PUBLIC",
+            detail="data_classification must be one of: CONFIDENTIAL, PII, PUBLIC",
         )
 
     logger.info(
@@ -496,7 +496,7 @@ def export_audit_log(
     classification: str | None = None,
 ):
     """
-    Export audit log entries for HIPAA compliance reporting.
+    Export audit log entries for compliance reporting.
     Returns JSONL-compatible list of attestation records.
     """
     api_key_id = getattr(request.state, "api_key_id", "anonymous")

@@ -40,9 +40,9 @@ class ContractParameters:
     temperature: float
     seed: int
     required_data_sources: list[str] = field(default_factory=list)
-    # Healthcare / HIPAA fields
-    data_classification: str = "PUBLIC"     # PHI | PII | PUBLIC
-    purpose_of_use: str = "TREATMENT"       # TREATMENT | PAYMENT | OPERATIONS | RESEARCH
+    # Audit & Security fields
+    data_classification: str = "PUBLIC"     # CONFIDENTIAL | PII | PUBLIC
+    purpose_of_use: str = "GENERAL"       # GENERAL | OPERATIONS | RESEARCH
     authorized_by: str = ""                 # API key ID or user identifier
 
     def __post_init__(self):
@@ -52,8 +52,8 @@ class ContractParameters:
             raise TypeError(f"temperature must be float, got {type(self.temperature)}")
         if not isinstance(self.seed, int):
             raise TypeError(f"seed must be int, got {type(self.seed)}")
-        if self.data_classification not in ("PHI", "PII", "PUBLIC"):
-            raise ValueError(f"data_classification must be PHI, PII, or PUBLIC, got {self.data_classification}")
+        if self.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC"):
+            raise ValueError(f"data_classification must be CONFIDENTIAL, PII, or PUBLIC, got {self.data_classification}")
 
 @dataclass
 class RequiredObligations:

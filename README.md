@@ -131,17 +131,17 @@ docker-compose up -d
 | `GET` | `/health` | Health check | None |
 | `GET` | `/v1/public-key` | Governance public key | None |
 | `POST` | `/v1/infer` | Run verified inference | API Key |
-| `GET` | `/v1/audit/export` | Export audit log (HIPAA) | API Key + `audit` scope |
+| `GET` | `/v1/audit/export` | Export audit log | API Key + `audit` scope |
 | `GET` | `/v1/attestation/{id}` | Get specific attestation | API Key |
 
-## Healthcare Features
+## Enterprise & Security Features
 
-- **Data Classification**: Tag inferences as `PHI`, `PII`, or `PUBLIC`
-- **Purpose of Use**: HIPAA-aligned purpose codes (`TREATMENT`, `PAYMENT`, `OPERATIONS`, `RESEARCH`)
+- **Data Classification**: Tag inferences with sensitivity levels (e.g., `CONFIDENTIAL`, `RESTRICTED`, `PUBLIC`)
+- **Purpose of Use**: Configurable purpose codes based on business domain
 - **Audit Trail**: Every inference recorded with timestamp, user ID, request ID, and classification
-- **Audit Export**: JSONL-format export for compliance reporting (6-year retention)
+- **Audit Export**: JSONL-format export for compliance reporting
 - **API Key Scoping**: Per-organization keys with configurable permissions
-- **Encryption at Rest**: SQLite WAL mode with optional PHI field encryption
+- **Encryption at Rest**: SQLite WAL mode with optional sensitive field encryption
 
 ## Architecture
 
@@ -190,7 +190,7 @@ Key settings:
 | `RATE_LIMIT_RPM` | `30` | Requests per minute |
 | `WORKER_TIMEOUT_SECONDS` | `180` | Max inference time |
 | `DEFAULT_DATA_CLASSIFICATION` | `PUBLIC` | Default data class |
-| `AUDIT_RETENTION_DAYS` | `2190` | 6 years (HIPAA) |
+| `AUDIT_RETENTION_DAYS` | `2190` | 6 years default retention |
 
 ## License
 

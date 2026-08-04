@@ -7,8 +7,8 @@ API_KEY = "5d3e723cd0ab90a581e179f8d2cd13ec6af7ea3e6c26c3c56d36c1af22a52ded"
 url = "http://localhost:8000/v1/infer"
 data = {
     "prompt": "Summarize the patient's symptoms: headache, nausea, and elevated troponin.",
-    "data_classification": "PHI",
-    "purpose_of_use": "TREATMENT",
+    "data_classification": "CONFIDENTIAL",
+    "purpose_of_use": "GENERAL",
     "max_tokens": 50,
     "temperature": 0.2
 }

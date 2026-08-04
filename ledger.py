@@ -1,10 +1,10 @@
 """
 CGI Protocol — Hardened Audit Ledger v2.0
 ==========================================
-HIPAA-aligned, zero-cost SQLite audit ledger with:
+Enterprise-aligned, zero-cost SQLite audit ledger with:
   - WAL mode for concurrent reads
   - Connection context manager (no leaks)
-  - Data classification column for HIPAA
+  - Data classification column for audit security
   - User ID and request ID columns for access control audit
   - Proper error handling (no silent swallowing)
   - Audit log export for compliance reporting
@@ -92,7 +92,7 @@ class AuditLedger:
                 logger.info("Ledger schema v1 initialized")
 
             if current_version < 2:
-                # Healthcare / HIPAA columns
+                # Audit / Security columns
                 for col, col_type, default in [
                     ("request_id", "TEXT", "''"),
                     ("user_id", "TEXT", "''"),
@@ -122,7 +122,7 @@ class AuditLedger:
                 cursor.execute(
                     "INSERT OR IGNORE INTO schema_version (version) VALUES (2)"
                 )
-                logger.info("Ledger schema migrated to v2 (HIPAA columns)")
+                logger.info("Ledger schema migrated to v2 (Security columns)")
 
             conn.commit()
 
@@ -194,7 +194,7 @@ class AuditLedger:
         classification: str | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Export audit log entries for HIPAA compliance reporting.
+        Export audit log entries for compliance reporting.
         Returns metadata (no full bundles) to minimize data exposure.
         """
         with self._connect() as conn:

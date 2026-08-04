@@ -65,6 +65,7 @@ from contract import (
 from ledger import AuditLedger
 from merkle import MerkleTree
 from registry import AttestationRegistry
+from adapters import get_inference_adapter
 
 logger = logging.getLogger("cgi.gateway")
 
@@ -337,64 +338,28 @@ def run_inference(req: InferenceRequest, request: Request):
         with open(replay_file, "w") as f:
             json.dump(cache, f, indent=2)
 
-    # ── 4. Spawn worker with TIMEOUT ──────────────────────────
-    worker_path = os.path.join(BASE_DIR, "worker.py")
-    stdin_payload = json.dumps({
-        "payload": req.prompt,
-        "execution_id": execution_id,
-    })
-
+    # ── 4. Execute Inference via Adapter ──────────────────────
     wall_start = time.monotonic()
-
+    
     try:
-        process = subprocess.run(
-            [
-                sys.executable,
-                worker_path,
-                str(req.max_tokens),
-                str(req.max_tokens),
-                str(settings.DEFAULT_SEED),
-            ],
-            input=stdin_payload,
-            capture_output=True,
-            text=True,
-            cwd=BASE_DIR,
-            timeout=settings.WORKER_TIMEOUT_SECONDS,
+        adapter = get_inference_adapter()
+        generated_text, stop_reason, token_count = adapter.generate(
+            prompt=req.prompt,
+            max_tokens=req.max_tokens,
+            execution_id=execution_id,
+            seed=settings.DEFAULT_SEED
         )
-    except subprocess.TimeoutExpired:
+    except Exception as e:
         logger.error(
-            "WORKER_TIMEOUT | request_id=%s exec_id=%s timeout=%ds",
-            request_id, execution_id, settings.WORKER_TIMEOUT_SECONDS,
+            "ADAPTER_FAILURE | request_id=%s exec_id=%s error=%s",
+            request_id, execution_id, str(e),
         )
         raise HTTPException(
-            status_code=504,
-            detail=f"Worker timed out after {settings.WORKER_TIMEOUT_SECONDS}s",
+            status_code=500,
+            detail=f"Inference backend failed: {str(e)}",
         )
 
     wall_ms = round((time.monotonic() - wall_start) * 1000, 1)
-
-    if process.returncode != 0:
-        logger.error(
-            "WORKER_FAILURE | request_id=%s exec_id=%s code=%d stderr=%s",
-            request_id, execution_id, process.returncode, process.stderr[-500:],
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Worker failed with code {process.returncode}",
-        )
-
-    # ── 5. Parse worker output ────────────────────────────────
-    generated_text, stop_reason, token_count = _parse_worker_output(process.stdout)
-
-    if not generated_text.strip():
-        logger.error(
-            "WORKER_EMPTY_OUTPUT | request_id=%s exec_id=%s stderr=%s",
-            request_id, execution_id, process.stderr[-300:],
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Worker produced empty output",
-        )
 
     logger.info(
         "INFERENCE_COMPLETE | request_id=%s exec_id=%s tokens=%d duration_ms=%s stop=%s",
@@ -534,47 +499,6 @@ def get_attestation(execution_id: str):
         raise HTTPException(status_code=404, detail="Attestation not found")
     return result
 
-
-# ─────────────────────────────────────────────────────────────
-# Worker Output Parser (from cgi_runtime.py)
-# ─────────────────────────────────────────────────────────────
-
-def _parse_worker_output(stdout: str):
-    """
-    Deterministic parser for worker.py stdout protocol.
-    Returns: (generated_text, stop_reason, token_count)
-    """
-    generated_text = ""
-    stop_reason = "limit_reached"
-    token_count = 0
-
-    for raw_line in stdout.split("\n"):
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        if line.startswith("[TOKEN]"):
-            try:
-                text_marker = "text="
-                text_pos = line.find(text_marker)
-                if text_pos == -1:
-                    continue
-                token_repr = line[text_pos + len(text_marker):]
-                token_text = token_repr.encode("utf-8").decode("unicode_escape")
-                if len(token_text) >= 2 and token_text[0] in ("'", '"') and token_text[-1] == token_text[0]:
-                    token_text = token_text[1:-1]
-                generated_text += token_text
-                token_count += 1
-            except Exception:
-                continue
-
-        elif line.startswith("[WORKER_STOP]"):
-            try:
-                stop_reason = line.split("reason=", 1)[1].strip()
-            except IndexError:
-                stop_reason = "unknown"
-
-    return generated_text, stop_reason, token_count
 
 
 # ─────────────────────────────────────────────────────────────

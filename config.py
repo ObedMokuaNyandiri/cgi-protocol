@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     MAX_PROMPT_LENGTH: int = 4096  # Characters
 
     # ── Worker / Inference ────────────────────────────────────────
+    AI_BACKEND_TYPE: str = "huggingface_local"  # "huggingface_local" | "openai_compatible"
+    AI_ENDPOINT_URL: str = ""
+    AI_API_KEY: str = ""
+    
     MODEL_PATH: str = "./models/models/qwen_0_5b"
     MODEL_ID: str = "qwen_0_5b"
     ALLOWED_MODELS: list[str] = Field(default_factory=lambda: ["qwen_0_5b"])

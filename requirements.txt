@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # CGI Protocol — Core API Dependencies
 # Pin all versions for reproducible builds
 

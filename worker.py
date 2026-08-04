@@ -129,14 +129,19 @@ STOP_STRINGS = ["</s>", "<|im_end|>"]
 # =========================================================
 # LOAD MODEL
 # =========================================================
+local_only = True
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = "Qwen/Qwen1.5-0.5B"
+    local_only = False
+
 tokenizer = AutoTokenizer.from_pretrained(
     MODEL_PATH,
-    local_files_only=True
+    local_files_only=local_only
 )
 
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_PATH,
-    local_files_only=True,
+    local_files_only=local_only,
     torch_dtype=torch.float16 if device == "cuda" else torch.float32
 ).to(device)
 

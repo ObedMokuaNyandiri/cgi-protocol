@@ -37,8 +37,7 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 6
 
   # ── Caddy Reverse Proxy (Automatic HTTPS) ────────────────
   caddy:
@@ -51,8 +50,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      cgi-gateway:
-        condition: service_healthy
+      - cgi-gateway
     restart: unless-stopped
     deploy:
       resources:

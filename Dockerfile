@@ -21,6 +21,7 @@ COPY --from=builder /install /usr/local
 
 # Copy source code
 COPY *.py ./
+COPY adapters/ ./adapters/
 COPY enclave/ ./enclave/
 COPY zk/ ./zk/
 COPY circuits/ ./circuits/

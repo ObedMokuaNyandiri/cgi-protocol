@@ -37,8 +37,6 @@ from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from filelock import FileLock
 
 from contract import InferenceContract
-from enclave.attestation import TEEAttestation
-from enclave.key_release import RemoteKMS
 from merkle import MerkleTree
 from registry import AttestationRegistry
 
@@ -57,20 +55,7 @@ os.makedirs(LOG_DIR,    exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# =========================================================
-# KMS INTEGRATION
-# NOTE (FLAW-008): In production this measurement is sealed
-# by the Nitro hypervisor PCR. Here we hash our own files as
-# a local-dev approximation — clearly labelled as such.
-# =========================================================
-def _get_expected_measurement() -> str:
-    h = hashlib.sha384()
-    for filename in ["cgi_runtime.py", "worker.py"]:
-        filepath = os.path.join(BASE_DIR, filename)
-        if os.path.exists(filepath):
-            with open(filepath, "rb") as f:
-                h.update(f.read())
-    return h.hexdigest()
+
 
 
 # =========================================================
@@ -100,18 +85,15 @@ def _sign_bytes(private_key: Any, data: bytes) -> bytes:
 # =========================================================
 # WORKER STDOUT PROTOCOL — FIX FLAW-006
 # =========================================================
-def _parse_worker_output(stdout: str) -> tuple[str, str, int]:
-    """
-    Deterministic parser for worker.py stdout protocol.
-    Returns: (generated_text, stop_reason, token_count)
-    Never silently discards tokens; logs parse failures explicitly.
-    """
+def _parse_worker_output(stdout: str) -> tuple[str, str, int, str]:
+    """Parse the worker's stdout into generated text, stop reason, token count, and logit fingerprint."""
     generated_text = ""
-    stop_reason    = "limit_reached"
-    token_count    = 0
-    parse_errors   = 0
+    stop_reason = "unknown"
+    token_count = 0
+    parse_errors = 0
+    logit_fingerprint = None
 
-    for lineno, raw_line in enumerate(stdout.split("\n"), 1):
+    for lineno, raw_line in enumerate(stdout.splitlines(), 1):
         line = raw_line.strip()
         if not line:
             continue
@@ -124,11 +106,22 @@ def _parse_worker_output(stdout: str) -> tuple[str, str, int]:
                 if text_pos == -1:
                     raise ValueError("Missing text= marker")
                 token_repr = line[text_pos + len(text_marker):]
-                # Decode the repr-string safely
-                token_text = token_repr.encode("utf-8").decode("unicode_escape")
-                # Strip surrounding quotes that repr() adds
-                if len(token_text) >= 2 and token_text[0] in ("'", '"') and token_text[-1] == token_text[0]:
-                    token_text = token_text[1:-1]
+                # FIX M-2: `unicode_escape` cannot decode multi-byte UTF-8 sequences
+                # correctly (e.g. Chinese, Arabic, mathematical symbols). The worker
+                # uses repr() to encode token strings, so we must use ast.literal_eval
+                # on the quoted string to correctly reconstruct the original text.
+                import ast
+                # Ensure the repr string has surrounding quotes for literal_eval
+                if not (token_repr.startswith(("'", '"')) and token_repr.endswith(token_repr[0])):
+                    token_repr = repr(token_repr)  # wrap bare text
+                try:
+                    token_text = ast.literal_eval(token_repr)
+                except (ValueError, SyntaxError):
+                    # Fallback: strip surrounding quotes manually
+                    if len(token_repr) >= 2 and token_repr[0] in ("'", '"') and token_repr[-1] == token_repr[0]:
+                        token_text = token_repr[1:-1]
+                    else:
+                        token_text = token_repr
                 generated_text += token_text
                 token_count += 1
             except Exception as exc:
@@ -137,17 +130,19 @@ def _parse_worker_output(stdout: str) -> tuple[str, str, int]:
             continue
 
         if line.startswith("[WORKER_STOP]"):
-            # Protocol: [WORKER_STOP] reason=<reason>
-            try:
-                stop_reason = line.split("reason=", 1)[1].strip()
-            except IndexError:
-                stop_reason = "unknown"
+            # Protocol: [WORKER_STOP] reason=<reason> logit_fingerprint=<fingerprint>
+            parts = line.split(" ")
+            for part in parts[1:]:
+                if part.startswith("reason="):
+                    stop_reason = part.split("reason=", 1)[1].strip()
+                elif part.startswith("logit_fingerprint="):
+                    logit_fingerprint = part.split("logit_fingerprint=", 1)[1].strip()
             continue
 
     if parse_errors > 0:
         print(f"[RUNTIME][WARN] {parse_errors} token(s) lost to parse errors — output may be incomplete.")
 
-    return generated_text, stop_reason, token_count
+    return generated_text, stop_reason, token_count, logit_fingerprint
 
 
 # =========================================================
@@ -172,26 +167,18 @@ def _measure_peak_memory_mb() -> float:
 # =========================================================
 class CGIRuntime:
 
-    def __init__(
-        self,
-        attester: TEEAttestation | None = None,
-        kms: RemoteKMS | None = None,
-    ):
+    def __init__(self):
         self.audit_merkle_tree = MerkleTree()
-
-        print("[BOOT] Requesting Key Release from Remote KMS via TEE Attestation...")
-
-        self.attester         = attester or TEEAttestation(enclave_id="nitro-enclave-prod-1")
-        hardware_quote_bytes  = self.attester.generate_quote(user_data="nonce_for_kms")
-
-        self.kms         = kms or RemoteKMS(expected_measurement=_get_expected_measurement())
-        raw_key_bytes    = self.kms.negotiate_key_release(hardware_quote_bytes)
-
-        if not raw_key_bytes:
-            raise RuntimeError(
-                "Key Release Failed. Enclave measurement mismatched or quote invalid."
-            )
-
+        print("[BOOT] Starting Local Cryptographic Sidecar (CGI Wrapper)...")
+        
+        # Load local identity key (BYOK)
+        key_path = os.path.join(BASE_DIR, "auth", "private_key.pem")
+        if not os.path.exists(key_path):
+            raise FileNotFoundError(f"Local identity key not found at {key_path}")
+            
+        with open(key_path, "rb") as f:
+            raw_key_bytes = f.read()
+            
         self.GOVERNANCE_PRIVATE_KEY = serialization.load_pem_private_key(
             raw_key_bytes, password=None
         )
@@ -246,7 +233,7 @@ class CGIRuntime:
     # =========================================================
     # EPOCH EXECUTION
     # =========================================================
-    def run_epoch(self) -> dict[str, Any]:
+    def run_epoch(self, mode: str = "local") -> dict[str, Any]:
         token_path = os.environ.get("CGI_TOKEN_PATH", os.path.join(BASE_DIR, "auth", "epoch_token.json"))
 
         if not os.path.exists(token_path):
@@ -299,60 +286,85 @@ class CGIRuntime:
                 f"actual prompt hashes to '{computed_hash}'. Aborting attestation."
             )
 
-        # ── 3. Spawn worker  ───────────────────────────────────────────────
-        max_tokens = contract.parameters.max_output_tokens or 200
-        seed       = contract.parameters.seed or 42
-
-        print(f"[RUNTIME] Spawning worker.py | exec_id={contract.execution_id} | tokens={max_tokens}")
-
-        wall_start = time.monotonic()
-
-        process = subprocess.run(
-            [sys.executable, os.path.join(BASE_DIR, "worker.py"), str(max_tokens), str(max_tokens), str(seed)],
-            input=json.dumps({"payload": raw_prompt}),
-            capture_output=True,
-            text=True,
-            cwd=BASE_DIR,
-        )
-
-        wall_ms = round((time.monotonic() - wall_start) * 1000, 1)
-
-        if process.returncode != 0:
-            # Log stderr before aborting so it's captured in audit
-            self.audit("WORKER_FAILURE", {
-                "execution_id": contract.execution_id,
-                "returncode":   process.returncode,
-                "stderr_tail":  process.stderr[-2000:],
-            })
-            raise RuntimeError(
-                f"worker.py exited with code {process.returncode}.\n"
-                f"stderr:\n{process.stderr[-2000:]}"
+        if mode == "api":
+            from zktls_fetcher import fetch_with_zktls
+            print(f"[RUNTIME] Fetching via zkTLS | exec_id={contract.execution_id}")
+            wall_start = time.monotonic()
+            
+            # Using block hash from contract as temporal anchor
+            anchor_hash = contract.parameters.temporal_anchor if hasattr(contract.parameters, 'temporal_anchor') and contract.parameters.temporal_anchor else "0x0000000000000000000000000000000000000000"
+            api_data, proof_hash = fetch_with_zktls("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent", anchor_hash, raw_prompt)
+            
+            generated_text = str(api_data)
+            stop_reason = "api_complete"
+            token_count = len(generated_text) // 4
+            wall_ms = round((time.monotonic() - wall_start) * 1000, 1)
+            
+            execution_metrics: dict[str, Any] = {
+                "wall_duration_ms":         wall_ms,
+                "tokens_generated":         token_count,
+                "stop_reason":              stop_reason,
+                "hardware_accelerator":     "external_api",
+                "execution_mode":           "api_zktls",
+                "zktls_transcript_hash":    proof_hash,
+            }
+        else:
+            # Local model execution
+            max_tokens = contract.parameters.max_output_tokens or 200
+            seed       = contract.parameters.seed or 42
+    
+            print(f"[RUNTIME] Spawning worker.py | exec_id={contract.execution_id} | tokens={max_tokens}")
+    
+            wall_start = time.monotonic()
+    
+            worker_timeout = int(os.environ.get("WORKER_TIMEOUT_SECONDS", "180"))
+            process = subprocess.run(
+                [sys.executable, os.path.join(BASE_DIR, "worker.py"), str(max_tokens), str(max_tokens), str(seed)],
+                input=json.dumps({"payload": raw_prompt}),
+                capture_output=True,
+                text=True,
+                cwd=BASE_DIR,
+                timeout=worker_timeout,
             )
-
-        # ── 4. Parse worker output  ────────────────────────────────────────
-        # FIX FLAW-006: deterministic parser, no silent discard
-        generated_text, stop_reason, token_count = _parse_worker_output(process.stdout)
-
-        if not generated_text.strip():
-            raise RuntimeError(
-                "Worker produced empty output. "
-                f"stop_reason={stop_reason} | stderr:\n{process.stderr[-500:]}"
-            )
-
-        # FIX FLAW-002: real metrics — not fabricated constants
-        peak_memory_mb = _measure_peak_memory_mb()
-
-        execution_metrics: dict[str, Any] = {
-            "wall_duration_ms":         wall_ms,
-            "tokens_generated":         token_count,
-            "stop_reason":              stop_reason,
-            "peak_child_memory_mb":     peak_memory_mb,
-            "hardware_accelerator":     "cpu-dev" if not _has_gpu() else "cuda",
-            "enclave_network_state":    "isolated_no_egress",
-            # NOTE: pcr0 would come from the Nitro NSM in production
-            "pcr0_source":              "local-dev-self-hash",
-            "pcr0_measurement":         _get_expected_measurement()[:64],
-        }
+    
+            wall_ms = round((time.monotonic() - wall_start) * 1000, 1)
+    
+            if process.returncode != 0:
+                self.audit("WORKER_FAILURE", {
+                    "execution_id": contract.execution_id,
+                    "returncode":   process.returncode,
+                    "stderr_tail":  process.stderr[-2000:],
+                })
+                raise RuntimeError(
+                    f"worker.py exited with code {process.returncode}.\n"
+                    f"stderr:\n{process.stderr[-2000:]}"
+                )
+    
+            generated_text, stop_reason, token_count, logit_fingerprint = _parse_worker_output(process.stdout)
+    
+            if not generated_text.strip():
+                raise RuntimeError(
+                    "Worker produced empty output. "
+                    f"stop_reason={stop_reason} | stderr:\n{process.stderr[-500:]}"
+                )
+    
+            peak_memory_mb = _measure_peak_memory_mb()
+            
+            # Optimistic state root commitment
+            from optimistic_committer import OptimisticCommitter
+            committer = OptimisticCommitter(contract.execution_id)
+            state_root = committer.commit_trace(raw_prompt, generated_text, logit_fingerprint)
+    
+            execution_metrics: dict[str, Any] = {
+                "wall_duration_ms":         wall_ms,
+                "tokens_generated":         token_count,
+                "stop_reason":              stop_reason,
+                "peak_child_memory_mb":     peak_memory_mb,
+                "hardware_accelerator":     "cpu-dev" if not _has_gpu() else "cuda",
+                "execution_mode":           "local_optimistic",
+                "optimistic_state_root":    state_root,
+                "logit_fingerprint_hash":   logit_fingerprint,
+            }
 
         print(f"[RUNTIME] Worker done | tokens={token_count} | duration={wall_ms}ms | stop={stop_reason}")
         print(f"[RUNTIME] Output preview: {generated_text[:120]}...")
@@ -384,8 +396,7 @@ class CGIRuntime:
         bundle["attestation"] = {
             "root_hash":           "0x" + payload_hash,
             "signature":           signature_b64,
-            "signed_by":           "governance-enclave-key",
-            "enclave_measurement": "nitro-enclave-prod-1",
+            "signed_by":           "cgi-local-identity",
             "attested_at":         int(time.time()),
         }
 
@@ -440,8 +451,15 @@ def _has_gpu() -> bool:
 # =========================================================
 if __name__ == "__main__":
     print("RUNTIME START")
+    # Parse mode
+    mode = "local"
+    if "--mode=api" in sys.argv:
+        mode = "api"
+    
     runtime = CGIRuntime()
-    runtime.audit("SYSTEM_BOOT", {})
-    bundle = runtime.run_epoch()
-    runtime.audit("SYSTEM_SHUTDOWN", {})
+    runtime.audit("SYSTEM_BOOT", {"mode": mode})
+    
+    bundle = runtime.run_epoch(mode=mode)
     print(f"\nAttestation root_hash: {bundle['attestation']['root_hash']}")
+    
+    runtime.audit("SYSTEM_SHUTDOWN", {})

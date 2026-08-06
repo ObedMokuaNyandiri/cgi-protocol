@@ -21,10 +21,16 @@ COPY --from=builder /install /usr/local
 
 # Copy source code
 COPY *.py ./
+COPY *.txt ./
+COPY *.md ./
+COPY *.html ./
 COPY adapters/ ./adapters/
-COPY enclave/ ./enclave/
 COPY zk/ ./zk/
 COPY circuits/ ./circuits/
+COPY auth/ ./auth/
+COPY models/ ./models/
+# Note: enclave/ is optional — skip if not present
+COPY enclave/ ./enclave/ 2>/dev/null || true
 
 # Create required directories with correct ownership
 RUN mkdir -p /app/auth /app/outputs /app/logs /app/data && \

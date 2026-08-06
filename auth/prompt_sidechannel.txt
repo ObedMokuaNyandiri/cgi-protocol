@@ -1,1 +1,1 @@
-AGENT_ACTION
+{"ciphertext": "mock_encrypted_prompt", "key_id": "test_key", "commitment": "hash"}

@@ -127,10 +127,19 @@ class FormalVerifier:
                 result.failed_checks.append("Canonical root_hash mismatch! Payload was tampered.")
             
         # A1: Decoupled Output Hash Verification
+        # FIX M-5: Support both v3.0 (decoupled output_commitment) and v3.1 
+        # (inline inference_output) schemas. For v3.1, the output is directly
+        # in the payload, so we compare external_output directly to it.
         computed_external_hash = hashlib.sha256(self.external_output.encode("utf-8")).hexdigest()
-        if computed_external_hash != output_commitment.get("output_hash"):
-            result.failed_checks.append("Decoupled output hash does not match attestation commitment!")
-
+        
+        if "inference_output" in self.payload:
+            # v3.1 schema: output is inline
+            if self.external_output != self.payload.get("inference_output"):
+                result.failed_checks.append("Inline inference_output does not match provided external_output!")
+        else:
+            # v3.0 schema: output is decoupled via hash commitment
+            if computed_external_hash != output_commitment.get("output_hash"):
+                result.failed_checks.append("Decoupled output hash does not match attestation commitment!")
         # A1: Contract Validity (Replay Attack Prevention)
         import time
         validity = contract_data.get("validity", {})

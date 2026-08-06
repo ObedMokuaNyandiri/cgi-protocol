@@ -133,7 +133,8 @@ token = {
     "issued_at": now,
     "expires": now + 3600,
     "scope": "epoch_execution",
-    "contract": contract.to_dict()
+    "contract": contract.to_dict(),
+    "prompt": raw_prompt
 }
 
 payload = json.dumps(

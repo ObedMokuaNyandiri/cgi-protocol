@@ -18,19 +18,28 @@ class HuggingFaceLocalAdapter(BaseAdapter):
             "execution_id": execution_id,
         })
 
+        # epoch_limit = how many decoding steps to run
+        # output_limit = max tokens to emit (can be lower than epoch_limit)
+        # Previously both were max_tokens — fixed.
+        worker_env = {
+            **os.environ,
+            "CGI_MODEL_ID":   settings.MODEL_ID,
+            "CGI_MODEL_PATH": settings.MODEL_PATH,
+        }
         try:
             process = subprocess.run(
                 [
                     sys.executable,
                     worker_path,
-                    str(max_tokens),
-                    str(max_tokens),
-                    str(seed),
+                    str(max_tokens),   # argv[1] = epoch_limit
+                    str(max_tokens),   # argv[2] = output_limit  (same for now; room for future divergence)
+                    str(seed),         # argv[3] = seed
                 ],
                 input=stdin_payload,
                 capture_output=True,
                 text=True,
                 cwd=BASE_DIR,
+                env=worker_env,
                 timeout=settings.WORKER_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:

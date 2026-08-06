@@ -86,18 +86,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
     Skips authentication for health check and public key endpoints.
     """
 
-    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
+    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc", "/dashboard", "/dashboard/export/csv", "/v1/stream/attestations", "/v1/anchor/status", "/v1/anchor/trigger"}
 
     def __init__(self, app, key_store: APIKeyStore):
         super().__init__(app)
         self._store = key_store
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if not self._store.is_enabled:
+        if request.url.path in self.EXEMPT_PATHS or request.url.path.startswith("/v1/attestation/"):
             return await call_next(request)
 
-        if request.url.path in self.EXEMPT_PATHS:
-            return await call_next(request)
+        if not self._store.is_enabled:
+            # SECURITY FIX (C-2): When no API keys file is configured the system
+            # MUST NOT silently open access to all callers. Returning 503 forces
+            # operators to consciously configure authentication before traffic
+            # can reach protected endpoints. This is "secure by default".
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": (
+                        "Authentication is not configured. "
+                        "Set API_KEYS_FILE and run 'python auth/keygen.py --api-key' "
+                        "to create an API key before sending requests."
+                    )
+                },
+            )
 
         api_key = request.headers.get("X-API-Key", "")
         if not api_key:
@@ -130,38 +143,65 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # Rate Limiting (Sliding Window)
 # ─────────────────────────────────────────────────────────────
 
-class RateLimiter:
-    """In-memory sliding window rate limiter. Per-key or per-IP."""
+from typing import Callable
 
-    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
+class RateLimiter:
+    """In-memory sliding window rate limiter. Per-key or per-IP.
+
+    FIX H-7: Periodic bucket pruning prevents the _buckets dict from growing
+    unboundedly across long-running processes. Every `_PRUNE_INTERVAL` calls
+    to `is_allowed()` the method sweeps out identities whose windows are
+    completely empty, reclaiming memory. The amortised cost is O(1) per call.
+    """
+
+    _PRUNE_INTERVAL = 1000  # prune dead buckets every N is_allowed() calls
+
+    def __init__(self, max_requests: int | Callable[[], int] = 30, window_seconds: int = 60):
         self._max = max_requests
         self._window = window_seconds
         self._buckets: dict[str, list[float]] = defaultdict(list)
+        self._call_count = 0
+
+    def _prune(self, now: float) -> None:
+        """Remove entries for identities that have no events in the current window."""
+        cutoff = now - self._window
+        dead = [k for k, v in self._buckets.items() if not v or v[-1] <= cutoff]
+        for k in dead:
+            del self._buckets[k]
 
     def is_allowed(self, identity: str) -> bool:
         now = time.monotonic()
         cutoff = now - self._window
         bucket = self._buckets[identity]
 
-        # Purge expired entries
+        # Purge expired entries for this identity
         self._buckets[identity] = [t for t in bucket if t > cutoff]
         bucket = self._buckets[identity]
 
-        if len(bucket) >= self._max:
+        limit = self.max_requests
+        if len(bucket) >= limit:
             return False
 
         bucket.append(now)
+
+        # Amortised global prune (H-7 memory leak fix)
+        self._call_count += 1
+        if self._call_count % self._PRUNE_INTERVAL == 0:
+            self._prune(now)
+
         return True
 
     @property
     def max_requests(self) -> int:
+        if callable(self._max):
+            return self._max()
         return self._max
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Enforces per-key (or per-IP) rate limiting."""
 
-    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc"}
+    EXEMPT_PATHS: set[str] = {"/health", "/v1/public-key", "/docs", "/openapi.json", "/redoc", "/v1/license/status", "/v1/anchor/status", "/v1/stream/attestations", "/dashboard"}
 
     def __init__(self, app, limiter: RateLimiter):
         super().__init__(app)
@@ -177,15 +217,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             identity = request.client.host if request.client else "unknown"
 
         if not self._limiter.is_allowed(identity):
+            limit = self._limiter.max_requests
             logger.warning(
-                "RATE_LIMITED | identity=%s path=%s",
+                "RATE_LIMITED | identity=%s path=%s limit=%d/min",
                 identity,
                 request.url.path,
+                limit
             )
             return JSONResponse(
                 status_code=429,
                 content={
-                    "detail": f"Rate limit exceeded ({self._limiter.max_requests}/min). Try again later.",
+                    "detail": f"Rate limit exceeded ({limit}/min). Try again later.",
                 },
                 headers={"Retry-After": "60"},
             )

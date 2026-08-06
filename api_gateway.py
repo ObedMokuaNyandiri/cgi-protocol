@@ -1,7 +1,8 @@
 """
-CGI Protocol — Production API Gateway v2.0
+CGI Protocol — Production API Gateway v2.1
 ============================================
-Healthcare-grade verifiable AI inference API.
+Universal Verifiable AI inference API.
+Domain-agnostic: Healthcare, Legal, Financial, Government, Insurance, Media, Defence.
 
 Key changes from v1:
   - REMOVED: unittest.mock usage in production path
@@ -19,6 +20,7 @@ Key changes from v1:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -29,14 +31,23 @@ import sys
 import tempfile
 import time
 import uuid
+import csv
+import io
 from contextlib import asynccontextmanager
 from typing import Any
+
+# FIX C-4: filelock imported at module level, not inside the request handler.
+# Re-importing a module on every request triggers a sys.modules lookup + 
+# attribute resolution on each call — negligible in isolation but adds up at
+# scale and obscures the dependency for static analysis tools.
+from filelock import FileLock
 
 import uvicorn
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from config import settings
@@ -66,6 +77,9 @@ from ledger import AuditLedger
 from merkle import MerkleTree
 from registry import AttestationRegistry
 from adapters import get_inference_adapter
+from blockchain_anchor import AnchorEngine
+from license_manager import LicenseManager, LicenseStatus
+
 
 logger = logging.getLogger("cgi.gateway")
 
@@ -75,11 +89,58 @@ logger = logging.getLogger("cgi.gateway")
 
 class AppState:
     """Holds loaded keys and singletons for the app lifetime."""
-    private_key: ec.EllipticCurvePrivateKey | None = None
+    private_key:    ec.EllipticCurvePrivateKey | None = None
     public_key_pem: str = ""
-    ledger: AuditLedger | None = None
-    registry: AttestationRegistry | None = None
-    merkle_tree: MerkleTree | None = None
+    ledger:         "AuditLedger | None" = None
+    registry:       "AttestationRegistry | None" = None
+    merkle_tree:    "MerkleTree | None" = None
+    anchor_engine:  "AnchorEngine | None" = None
+    license_status: "LicenseStatus | None" = None
+    # FIX H-1: Adapter is a module-level singleton instantiated once at startup.
+    # Previously get_inference_adapter() was called inside run_inference() on
+    # every request, constructing a new object + performing an import lookup
+    # each time. A single shared adapter is safe because adapters are stateless.
+    adapter:        Any = None
+
+    # FIX C-3: Replace the file-backed unbounded replay cache (disk DoS vector)
+    # with an in-memory TTL set. Entries older than MAX_CONTRACT_AGE_S are
+    # irreplayable by contract design (expires_after_timestamp = now + 3600).
+    # Capped at REPLAY_CACHE_MAX to prevent memory exhaustion under sustained
+    # attack. When at capacity, the oldest entry is evicted (LRU approximation).
+    _replay_set:    set = None
+    _replay_times:  list = None  # parallel list of (timestamp, exec_id) for TTL eviction
+
+    REPLAY_CACHE_MAX = 100_000   # maximum entries before forced eviction
+    MAX_CONTRACT_AGE_S = 3_600  # 1 hour — matches expires_after_timestamp in contract
+
+    def replay_seen(self, execution_id: str) -> bool:
+        """Return True if execution_id has been processed (replay detected)."""
+        self._evict_expired()
+        return execution_id in self._replay_set
+
+    def replay_record(self, execution_id: str) -> None:
+        """Mark execution_id as processed."""
+        if self._replay_set is None:
+            self._replay_set = set()
+            self._replay_times = []
+        if len(self._replay_set) >= self.REPLAY_CACHE_MAX:
+            # Evict oldest entry to enforce cap
+            old_ts, old_id = self._replay_times.pop(0)
+            self._replay_set.discard(old_id)
+        self._replay_set.add(execution_id)
+        self._replay_times.append((time.monotonic(), execution_id))
+
+    def _evict_expired(self) -> None:
+        if not self._replay_times:
+            return
+        cutoff = time.monotonic() - self.MAX_CONTRACT_AGE_S
+        while self._replay_times and self._replay_times[0][0] < cutoff:
+            _, old_id = self._replay_times.pop(0)
+            self._replay_set.discard(old_id)
+
+    def init_replay_cache(self) -> None:
+        self._replay_set   = set()
+        self._replay_times = []
 
 
 app_state = AppState()
@@ -124,7 +185,7 @@ def _load_private_key() -> ec.EllipticCurvePrivateKey:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan — replaces deprecated @app.on_event."""
-    # ── Startup ───────────────────────────────────────────────
+    # ── Startup ───────────────────────────────────────────
     logging.basicConfig(
         level=getattr(logging, settings.LOG_LEVEL, logging.INFO),
         format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
@@ -142,23 +203,101 @@ async def lifespan(app: FastAPI):
 
     app_state.ledger = AuditLedger(settings.DB_PATH)
     app_state.registry = AttestationRegistry(chain_path=settings.CHAIN_FILE)
-    app_state.merkle_tree = MerkleTree()
 
-    # Ensure replay cache exists
-    replay_file = settings.REPLAY_FILE
-    if not os.path.exists(replay_file):
-        with open(replay_file, "w", encoding="utf-8") as f:
-            json.dump({}, f)
+    # Seed Merkle Tree from existing ledger records so state
+    # survives container restarts — not just in-memory for the session.
+    app_state.merkle_tree = MerkleTree()
+    prior_records = app_state.ledger.export_audit_log(limit=10000)
+    for rec in prior_records:
+        app_state.merkle_tree.add_leaf({
+            "execution_id": rec["execution_id"],
+            "root_hash": rec["root_hash"],
+            "timestamp": rec["timestamp"],
+        })
+    if prior_records:
+        logger.info(
+            "MerkleTree seeded with %d prior records from ledger.",
+            len(prior_records),
+        )
+
+    # FIX H-1: Instantiate adapter once at startup — not per-request.
+    app_state.adapter = get_inference_adapter()
+    logger.info("Inference adapter initialised: %s", type(app_state.adapter).__name__)
+
+    # FIX C-3: Initialise bounded in-memory replay cache.
+    app_state.init_replay_cache()
+
+    # Initialise Blockchain Anchor Engine
+    os.makedirs(settings.ANCHOR_DIR, exist_ok=True)
+    app_state.anchor_engine = AnchorEngine(
+        ledger=app_state.ledger,
+        anchor_dir=settings.ANCHOR_DIR,
+        calendar_urls=settings.OTS_CALENDAR_URLS,
+        min_batch_size=settings.ANCHOR_MIN_BATCH_SIZE,
+    )
+
+    # ── License Verification ─────────────────────────────────
+    license_manager = LicenseManager(issuer_public_key_path=settings.ISSUER_PUB_KEY_PATH)
+    license_status  = license_manager.verify_license(
+        license_file_path=settings.LICENSE_KEY_PATH,
+        enforcement=settings.LICENSE_ENFORCEMENT,
+    )
+    app_state.license_status = license_status
+
+    if not license_status.valid and settings.LICENSE_ENFORCEMENT == "ENFORCE":
+        logger.critical(
+            "LICENSE_BOOT_FAIL | %s — Gateway refusing to start.",
+            license_status.error,
+        )
+        raise RuntimeError(f"CGI-Protocol license check failed: {license_status.error}")
+
+    if license_status.valid:
+        logger.info(
+            "LICENSE_OK | tier=%s licensee=%s domain=%s expires=%s days_remaining=%d",
+            license_status.tier,
+            license_status.licensee_name,
+            license_status.licensee_domain,
+            license_status.expires_at_iso,
+            license_status.days_remaining,
+        )
+    else:
+        logger.warning("LICENSE_WARN | %s", license_status.error or "No license configured")
 
     logger.info(
-        "CGI Protocol API started | enclave_mode=%s | model=%s",
+        "CGI Protocol API started | enclave_mode=%s | model=%s | domain=%s | anchor=%s | license=%s",
         settings.ENCLAVE_MODE,
         settings.MODEL_ID,
+        settings.DOMAIN_CONTEXT,
+        "ENABLED" if settings.ANCHOR_ENABLED else "DISABLED",
+        license_status.tier if license_status.valid else "UNLICENSED",
     )
+
+    # ── Background Anchor Task ──────────────────────────────
+    async def _anchor_loop():
+        """Runs the anchor cycle every ANCHOR_INTERVAL_SECONDS."""
+        await asyncio.sleep(10)  # Brief startup delay
+        while True:
+            if settings.ANCHOR_ENABLED and app_state.anchor_engine:
+                try:
+                    result = app_state.anchor_engine.run_anchor_cycle()
+                    logger.info(
+                        "ANCHOR_TASK | status=%s records=%d anchor_id=%s",
+                        result.status, result.record_count, result.anchor_id or "N/A",
+                    )
+                except Exception as exc:
+                    logger.error("ANCHOR_TASK_ERROR | %s", exc)
+            await asyncio.sleep(settings.ANCHOR_INTERVAL_SECONDS)
+
+    # FIX H-2: asyncio.ensure_future() is deprecated in Python 3.10+.
+    # asyncio.create_task() is the correct modern API. It also binds the
+    # task to the *running* event loop, preventing subtle loop-replacement bugs.
+    asyncio.create_task(_anchor_loop())
+
+
 
     yield
 
-    # ── Shutdown ──────────────────────────────────────────────
+    # ── Shutdown ──────────────────────────────────────
     if app_state.ledger:
         app_state.ledger.close()
     logger.info("CGI Protocol API shut down gracefully")
@@ -184,9 +323,19 @@ app.add_middleware(
 )
 
 _key_store = APIKeyStore(settings.API_KEYS_FILE)
-app.add_middleware(RateLimitMiddleware, limiter=RateLimiter(max_requests=settings.RATE_LIMIT_RPM))
+
+def get_dynamic_rate_limit() -> int:
+    if app_state.license_status and app_state.license_status.valid:
+        return app_state.license_status.max_requests_per_minute
+    return settings.RATE_LIMIT_RPM
+
+app.add_middleware(RateLimitMiddleware, limiter=RateLimiter(max_requests=get_dynamic_rate_limit))
 app.add_middleware(AuthMiddleware, key_store=_key_store)
 app.add_middleware(RequestIDMiddleware)
+
+# Initialise SSE broadcaster (singleton, shared across all requests)
+from sse_router import AttestationBroadcaster
+_broadcaster = AttestationBroadcaster()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -235,7 +384,7 @@ def get_public_key():
 
 
 @app.post("/v1/infer")
-def run_inference(req: InferenceRequest, request: Request):
+async def run_inference(req: InferenceRequest, request: Request):
     """
     Executes an AI inference inside the verifiable CGI wrapper and returns
     the cryptographically signed attestation bundle.
@@ -244,22 +393,70 @@ def run_inference(req: InferenceRequest, request: Request):
     api_key_id = getattr(request.state, "api_key_id", "anonymous")
 
     # ── 1. Input validation ───────────────────────────────────
-    if req.model_id not in settings.ALLOWED_MODELS:
+    # When LICENSE_ENFORCEMENT=DISABLED or tier is ENTERPRISE, all models are allowed.
+    lic = app_state.license_status
+    is_enterprise_or_open = (
+        settings.LICENSE_ENFORCEMENT == "DISABLED"
+        or (lic and lic.valid and not lic.allowed_model_prefixes)
+    )
+    if not is_enterprise_or_open and req.model_id not in settings.ALLOWED_MODELS:
         raise HTTPException(
             status_code=400,
             detail=f"Model '{req.model_id}' not allowed. Available: {settings.ALLOWED_MODELS}",
         )
 
-    if req.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC"):
+    if req.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC", "PRIVILEGED", "CLASSIFIED"):
         raise HTTPException(
             status_code=400,
-            detail="data_classification must be one of: CONFIDENTIAL, PII, PUBLIC",
+            detail="data_classification must be one of: CONFIDENTIAL, PII, PUBLIC, PRIVILEGED, CLASSIFIED",
+        )
+
+    # ── 1b. License tier enforcement ─────────────────────────
+    if lic and lic.valid and settings.LICENSE_ENFORCEMENT != "DISABLED":
+        if not lic.is_model_allowed(req.model_id):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Model '{req.model_id}' is not included in your {lic.tier} license. "
+                    f"Upgrade to access this model."
+                ),
+            )
+        if not lic.is_classification_allowed(req.data_classification):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Data classification '{req.data_classification}' is not permitted "
+                    f"under your {lic.tier} license."
+                ),
+            )
+    # FIX M-1: Pydantic v2 API compatibility.
+    prompt_field = req.model_fields.get("prompt")
+    max_len = settings.MAX_PROMPT_LENGTH
+    if prompt_field and prompt_field.metadata:
+        for m in prompt_field.metadata:
+            if hasattr(m, 'max_length'):
+                max_len = m.max_length
+                break
+                
+    effective_max_prompt = min(
+        max_len,
+        lic.max_prompt_length if lic else settings.MAX_PROMPT_LENGTH,
+    )
+    if len(req.prompt) > effective_max_prompt:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Prompt length {len(req.prompt)} exceeds your license limit of "
+                f"{effective_max_prompt} characters ({lic.tier if lic else 'UNLIMITED'} tier)."
+            ),
         )
 
     logger.info(
-        "INFERENCE_REQUEST | request_id=%s user=%s model=%s classification=%s prompt_len=%d",
+        "INFERENCE_REQUEST | request_id=%s user=%s model=%s classification=%s prompt_len=%d license_tier=%s",
         request_id, api_key_id, req.model_id, req.data_classification, len(req.prompt),
+        lic.tier if (lic and lic.valid) else "UNLICENSED",
     )
+
 
     # ── 2. Build InferenceContract ────────────────────────────
     prompt_hash = hashlib.sha256(req.prompt.encode("utf-8")).hexdigest()
@@ -271,7 +468,7 @@ def run_inference(req: InferenceRequest, request: Request):
         version=ContractVersion(
             protocol_version="3.1",
             contract_schema="cgi-attestation-v3.1",
-            assurance_level="A5",
+            assurance_level="A1",
         ),
         parameters=ContractParameters(
             model_id=req.model_id,
@@ -315,39 +512,24 @@ def run_inference(req: InferenceRequest, request: Request):
         },
     )
 
-    # ── 3. Replay guard ───────────────────────────────────────
-    from filelock import FileLock
+    # ── 3. Replay guard (in-memory, bounded TTL — FIX C-3) ──────
+    if app_state.replay_seen(execution_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"REPLAY BLOCKED: execution_id '{execution_id}' already processed.",
+        )
+    app_state.replay_record(execution_id)
 
-    replay_file = settings.REPLAY_FILE
-    with FileLock(replay_file + ".lock", timeout=10):
-        cache: dict[str, float] = {}
-        if os.path.exists(replay_file):
-            try:
-                with open(replay_file, "r") as f:
-                    cache = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                cache = {}
-
-        if execution_id in cache:
-            raise HTTPException(
-                status_code=409,
-                detail=f"REPLAY BLOCKED: execution_id '{execution_id}' already processed.",
-            )
-
-        cache[execution_id] = time.time()
-        with open(replay_file, "w") as f:
-            json.dump(cache, f, indent=2)
-
-    # ── 4. Execute Inference via Adapter ──────────────────────
+    # ── 4. Execute Inference via Adapter (singleton — FIX H-1) ────
     wall_start = time.monotonic()
-    
+
     try:
-        adapter = get_inference_adapter()
-        generated_text, stop_reason, token_count = adapter.generate(
-            prompt=req.prompt,
-            max_tokens=req.max_tokens,
-            execution_id=execution_id,
-            seed=settings.DEFAULT_SEED
+        generated_text, stop_reason, token_count = await asyncio.to_thread(
+            app_state.adapter.generate,
+            req.prompt,
+            req.max_tokens,
+            execution_id,
+            settings.DEFAULT_SEED,
         )
     except Exception as e:
         logger.error(
@@ -442,13 +624,30 @@ def run_inference(req: InferenceRequest, request: Request):
         data_classification=req.data_classification,
     )
 
-    # ── 11. Audit merkle tree ─────────────────────────────────
+    # ── 11. Audit merkle tree ─────────────────────────────
     app_state.merkle_tree.add_leaf({
         "event": "INFERENCE_ATTESTED",
         "execution_id": execution_id,
         "root_hash": bundle["attestation"]["root_hash"],
         "timestamp": time.time(),
     })
+
+    # ── 12. Broadcast to SSE dashboard subscribers ────────────
+    _broadcaster.publish({
+        "type":              "ATTESTATION",
+        "execution_id":      execution_id,
+        "root_hash":         bundle["attestation"]["root_hash"],
+        "signature":         signature_b64,
+        "model_id":          req.model_id,
+        "data_classification": req.data_classification,
+        "tokens_generated":  token_count,
+        "wall_duration_ms":  wall_ms,
+        "output_preview":    generated_text[:200],
+        "ledger_total":      app_state.ledger.count(),
+        "chain_length":      app_state.registry._meta.get("length", 0) if app_state.registry else 0,
+    })
+
+
 
     return bundle
 
@@ -491,6 +690,43 @@ def export_audit_log(
     }
 
 
+@app.get("/dashboard/export/csv")
+def export_audit_log_csv():
+    """
+    Export full audit log as a streamed CSV file for the dashboard.
+    Bypasses strict API key requirements for local admin use.
+    """
+    def iter_csv():
+        # Write header
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["execution_id", "timestamp_iso", "root_hash", "request_id", "user_id", "data_classification", "anchor_id"])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+        
+        # Stream rows
+        for row in app_state.ledger.export_audit_log_stream():
+            writer.writerow([
+                row["execution_id"],
+                row["timestamp_iso"],
+                row["root_hash"],
+                row["request_id"],
+                row["user_id"],
+                row["data_classification"],
+                row["anchor_id"]
+            ])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        iter_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=cgi_audit_log.csv"}
+    )
+
 @app.get("/v1/attestation/{execution_id}")
 def get_attestation(execution_id: str):
     """Retrieve a specific attestation by execution ID."""
@@ -498,8 +734,152 @@ def get_attestation(execution_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Attestation not found")
     return result
+@app.get("/v1/attestation/{execution_id}/proof")
+def get_attestation_proof(execution_id: str):
+    """Serve the raw OpenTimestamps (.ots) file for a given execution ID."""
+    proof_path = app_state.ledger.get_anchor_proof_path(execution_id)
+    if not proof_path:
+        raise HTTPException(
+            status_code=404, 
+            detail="Anchor proof not found. The attestation may not be anchored yet."
+        )
+    if not os.path.exists(proof_path):
+        logger.error("PROOF_FILE_MISSING | path=%s", proof_path)
+        raise HTTPException(status_code=500, detail="Proof file missing on disk")
+        
+    return FileResponse(
+        path=proof_path,
+        media_type="application/octet-stream",
+        filename=f"anchor-{execution_id}.ots"
+    )
 
 
+
+@app.get("/v1/license/status")
+def get_license_status():
+    """
+    Returns the current license state for this CGI-Protocol deployment.
+    Clients can use this to monitor their tier, expiry, and unlocked features.
+    """
+    lic = app_state.license_status
+    if not lic:
+        return {"enforcement": settings.LICENSE_ENFORCEMENT, "licensed": False}
+    return {
+        "enforcement":             settings.LICENSE_ENFORCEMENT,
+        "licensed":                lic.valid,
+        "license_id":              lic.license_id,
+        "licensee":                lic.licensee_name,
+        "domain":                  lic.licensee_domain,
+        "tier":                    lic.tier,
+        "expires_at_iso":          lic.expires_at_iso,
+        "days_remaining":          lic.days_remaining,
+        "features": {
+            "max_requests_per_day":    lic.max_requests_per_day,
+            "max_requests_per_minute": lic.max_requests_per_minute,
+            "blockchain_anchor":       lic.blockchain_anchor,
+            "audit_export":            lic.audit_export,
+            "max_prompt_length":       lic.max_prompt_length,
+            "data_classifications":    lic.data_classifications,
+        },
+        "error": lic.error or None,
+    }
+
+
+@app.get("/v1/anchor/status")
+def get_anchor_status():
+    """
+    Returns recent blockchain anchor cycles.
+    Shows Merkle roots submitted to the Bitcoin network via OpenTimestamps.
+    """
+    anchors = app_state.ledger.get_anchor_status(limit=20)
+    unanchored_count = len(app_state.ledger.get_unanchored_records())
+    return {
+        "anchor_enabled": settings.ANCHOR_ENABLED,
+        "anchor_interval_seconds": settings.ANCHOR_INTERVAL_SECONDS,
+        "unanchored_records": unanchored_count,
+        "recent_anchor_cycles": anchors,
+    }
+
+
+@app.post("/v1/anchor/trigger")
+def trigger_anchor_now():
+    """
+    Manually trigger an anchor cycle immediately (on demand).
+    Useful for compliance officers who need an immediate Bitcoin proof,
+    or for demonstrations.
+    """
+    if not settings.ANCHOR_ENABLED:
+        raise HTTPException(status_code=503, detail="Anchor engine is disabled (ANCHOR_ENABLED=false)")
+    if not app_state.anchor_engine:
+        raise HTTPException(status_code=503, detail="Anchor engine not initialised")
+
+    result = app_state.anchor_engine.run_anchor_cycle()
+    return {
+        "anchor_id": result.anchor_id,
+        "merkle_root": result.merkle_root,
+        "record_count": result.record_count,
+        "submitted_to": result.submitted_to,
+        "ots_proof_path": result.ots_proof_path,
+        "status": result.status,
+        "message": result.message,
+    }
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+# Dashboard & SSE Stream (High-Impact Upgrade)
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/v1/public-key")
+def get_public_key():
+    """Returns the ECDSA public key in PEM format for client-side verification."""
+    try:
+        with open("auth/node_public.pem", "r", encoding="utf-8") as f:
+            pem_data = f.read()
+        return {"public_key_pem": pem_data}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Public key not found on server")
+
+@app.get("/v1/attestation/{execution_id}")
+def get_attestation(execution_id: str):
+    """Retrieves the full attestation JSON bundle for a given execution ID."""
+    bundle = app_state.ledger.get_attestation(execution_id)
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Attestation not found in ledger")
+    return bundle
+
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def live_dashboard():
+    """Serves the Live Compliance Dashboard HTML."""
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "dashboard.html"), "r", encoding="utf-8") as f:
+            content = f.read()
+        return HTMLResponse(content=content, headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        })
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Dashboard UI not found")
+
+@app.get("/v1/stream/attestations")
+async def stream_attestations(request: Request, api_key: str = None):
+    """
+    Server-Sent Events (SSE) stream for live attestations.
+    Can be authenticated via header OR query parameter (for EventSource).
+    """
+    return StreamingResponse(
+        _broadcaster.subscribe(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # For nginx
+        }
+    )
 
 # ─────────────────────────────────────────────────────────────
 # Entry Point

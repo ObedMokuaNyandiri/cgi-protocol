@@ -1,5 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 # CGI Protocol — Core API Dependencies
 # Pin all versions for reproducible builds
 
@@ -13,17 +11,32 @@ requests>=2.31.0,<3.0.0
 filelock>=3.13.0,<4.0.0
 starlette>=0.37.0,<1.0.0
 
-# Worker / ML dependencies (installed in the Docker image)
-torch>=2.0.0
-transformers>=4.40.0
-sentencepiece>=0.2.0
+# ── Optional: AI Provider SDKs ────────────────────────────────
+# Install only what you need based on your AI_BACKEND_TYPE.
+# All cloud adapters work with stdlib urllib — no SDK needed.
+# These are for advanced features or if you prefer official clients.
 
-# Optional: for blockchain bridge (not required for healthcare)
-# eth-keys>=0.4.0
-# eth-utils>=2.3.0
+# AWS Bedrock (required for AI_BACKEND_TYPE=bedrock)
+# boto3>=1.35.0
 
-# Optional: for hardware TEE attestation parsing
-# cbor2>=5.6.0
+# Anthropic official SDK (optional — adapter works without it)
+# anthropic>=0.40.0
 
-# Optional: for embedding-based constraint lattice
+# Cohere official SDK (optional — adapter works without it)
+# cohere>=5.0.0
+
+# ── ML / Local Model Dependencies ─────────────────────────────
+# ONLY needed for AI_BACKEND_TYPE=huggingface_local
+# These add ~2GB to your install. Install separately for cloud-only deployments.
+# See requirements-ml.txt for pinned versions.
+
+# ── Blockchain Anchoring ──────────────────────────────────────
+# Optional: for CLI-level Bitcoin proof verification
+# opentimestamps-client>=0.7.0
+
+# ── Optional: Embedding-based Constraint Lattice ─────────────
+# Required for constraint_lattice_v2.py in embedding mode
 # sentence-transformers>=3.0.0
+
+# ── Optional: Hardware TEE attestation ────────────────────────
+# cbor2>=5.6.0

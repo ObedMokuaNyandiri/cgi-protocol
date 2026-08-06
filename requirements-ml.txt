@@ -1,0 +1,11 @@
+# CGI Protocol — ML / Local Model Dependencies
+# Install ONLY when using AI_BACKEND_TYPE=huggingface_local
+# These add ~2GB to your installation.
+#
+# Usage: pip install -r requirements.txt -r requirements-ml.txt
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch>=2.0.0
+transformers>=4.40.0
+sentencepiece>=0.2.0

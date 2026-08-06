@@ -166,9 +166,15 @@ class AttestationRegistry:
                 known_hashes = set(known_hashes)
                 self._meta["root_hashes"] = known_hashes
             if root_hash in known_hashes:
-                # We return None instead of raising an error during stress tests
-                print(f"[REGISTRY] Duplicate entry detected for root: {root_hash}. Ignoring.")
-                return None
+                # FLAW-013 FIX (C-5): Raise instead of returning None.
+                # Returning None here caused AttributeError crashes in callers that
+                # access .entry_hash on the result without a None check. Raising a
+                # ValueError makes the duplicate explicit and lets callers handle it
+                # cleanly (api_gateway.py wraps registry.append in try/except already).
+                raise ValueError(
+                    f"[REGISTRY] Duplicate root_hash detected: {root_hash[:32]}... "
+                    "This execution was already registered. Skipping."
+                )
 
             sequence             = self._meta.setdefault("length", 0) + 1
             previous_entry_hash  = self._meta.get("tip_hash")

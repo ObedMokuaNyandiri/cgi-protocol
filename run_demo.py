@@ -185,11 +185,18 @@ def main() -> None:
 
     _, auth_dir = setup_clean_env()
 
+    import sys
+    # Filter out --api
+    args = [arg for arg in sys.argv[1:] if arg != "--api"]
+    
     # The user's actual query — what the contract commits to
-    USER_PROMPT = (
-        "Explain the role of cryptographic attestations in verifiable AI inference, "
-        "including how they enable trust without requiring the verifier to re-run the model."
-    )
+    if len(args) > 0:
+        USER_PROMPT = " ".join(args)
+    else:
+        USER_PROMPT = (
+            "Explain the role of cryptographic attestations in verifiable AI inference, "
+            "including how they enable trust without requiring the verifier to re-run the model."
+        )
 
     print(f"\n[DEMO] User prompt: {USER_PROMPT[:80]}...")
     token_path = generate_demo_token(auth_dir, USER_PROMPT)
@@ -205,30 +212,21 @@ def main() -> None:
         "CGI_TOKEN_PATH":       token_path,
         "PHYSICAL_NITRO_ENCLAVE": "1",
     }):
-        with unittest.mock.patch("enclave.nitro_nsm.NsmLib.is_available",   return_value=True):
-            with unittest.mock.patch("enclave.nitro_nsm.NsmLib.verify_doc", return_value=True):
-                with unittest.mock.patch(
-                    "enclave.key_release.RemoteKMS.negotiate_key_release",
-                    return_value=key_bytes_for_mock,   # FIX FLAW-012: no leaked handle
-                ):
-                    # Import inside mock context so module-level patches are applied
-                    import importlib
-
-                    import cgi_runtime
-                    importlib.reload(cgi_runtime)
-
-                    try:
-                        runtime = cgi_runtime.CGIRuntime()
-                        runtime.audit("SYSTEM_BOOT", {})
-                        print("\n[DEMO] Executing epoch...\n")
-                        bundle  = runtime.run_epoch()
-                        runtime.audit("SYSTEM_SHUTDOWN", {})
-                    except PermissionError as e:
-                        print(f"\n[!] Authorization failure: {e}")
-                        sys.exit(1)
-                    except RuntimeError as e:
-                        print(f"\n[!] Runtime failure: {e}")
-                        sys.exit(1)
+        import cgi_runtime
+        
+        try:
+            runtime = cgi_runtime.CGIRuntime()
+            runtime.audit("SYSTEM_BOOT", {})
+            print("\n[DEMO] Executing epoch...\n")
+            mode = "api" if "--api" in sys.argv else "local"
+            bundle  = runtime.run_epoch(mode=mode)
+            runtime.audit("SYSTEM_SHUTDOWN", {})
+        except PermissionError as e:
+            print(f"\n[!] Authorization failure: {e}")
+            sys.exit(1)
+        except RuntimeError as e:
+            print(f"\n[!] Runtime failure: {e}")
+            sys.exit(1)
 
     # ── Print a concise summary of the attestation ──────────────────────
     attest = bundle.get("attestation", {})

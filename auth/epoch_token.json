@@ -1,13 +1,13 @@
 {
   "token": {
-    "token_id": "epoch-6fb29e12",
-    "epoch_id": 1577,
+    "token_id": "epoch-f5572875",
+    "epoch_id": 29552,
     "token_budget": 30,
-    "issued_at": 1784901577,
-    "expires": 1784905177,
+    "issued_at": 1785929552,
+    "expires": 1785933152,
     "scope": "epoch_execution",
     "contract": {
-      "execution_id": "exec-3b0ba2a4-32a2-475a-ae23-a811e95e57c2",
+      "execution_id": "exec-33834d17-798b-4c1b-a193-56948e0dae63",
       "prompt_hash": "665ecddc3829d805ed11f7c095885cbee430ee9773143e4100df2a6f8eb3f28a",
       "version": {
         "protocol_version": "3.1",
@@ -21,7 +21,10 @@
         "seed": 42,
         "required_data_sources": [
           "https://api.bloomberg.com/v1/ticker/AAPL"
-        ]
+        ],
+        "data_classification": "PUBLIC",
+        "purpose_of_use": "GENERAL",
+        "authorized_by": ""
       },
       "claims": {
         "model_identity": "sha256:qwen_0_5b",
@@ -33,11 +36,12 @@
       },
       "validity": {
         "max_clock_skew_ms": 5000,
-        "expires_after_timestamp": 1816437577
+        "expires_after_timestamp": 1817465552
       },
       "trust_assumptions": {
         "requires_secure_tee": true,
         "requires_hash_collision_resistance": "SHA-256",
+        "requires_audit_trail": true,
         "requires_groth16_soundness": true,
         "requires_bn128_security": true
       },
@@ -53,7 +57,8 @@
         "watermark_type": "aaronson-logit-prng"
       },
       "extensions": {}
-    }
+    },
+    "prompt": "AGENT_ACTION"
   },
-  "signature": "lIGWALNJnMghjeWTFkvawuCYla59864TRLtWg+cis12oEd4tG3g/xEpQlWiT1AUJFAHUEDmYLe0Q3bSeccelDQ=="
+  "signature": "MEUCIQDwbYBJnvfteJ5gWGdgRXLHj2zRXjFqOkEqbW//tp5URQIgMTfeOcrG5/wdgK/TAamW4k6B7MCOJFkCKFn2FPzpnds="
 }

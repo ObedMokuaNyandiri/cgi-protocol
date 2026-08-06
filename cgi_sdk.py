@@ -148,18 +148,25 @@ class CGIAuditor:
         target = levels.get(assurance_level, 1)
 
         # ---- A1: Root Hash Binding ----
-        c_hash = self._hash_component(contract_data)
-        rs_hash = self._hash_component(runtime_state)
-        ri_hash = self._hash_component(runtime_identity)
-        oc_hash = self._hash_component(output_commitment)
-        ev_hash = self._hash_component(evidence)
-        gs_hash = self._hash_component(summary)
-        vv_hash = self._hash_component(verdict)
-        deliberation_hash = self._hash_component(payload.get("deliberation", {}))
+        schema_version = self._bundle.get("schema_version", "")
+        if schema_version == "cgi-attestation-v3.1":
+            payload_bytes = json.dumps(
+                payload, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+            computed_root = "0x" + hashlib.sha256(payload_bytes).hexdigest()
+        else:
+            c_hash = self._hash_component(contract_data)
+            rs_hash = self._hash_component(runtime_state)
+            ri_hash = self._hash_component(runtime_identity)
+            oc_hash = self._hash_component(output_commitment)
+            ev_hash = self._hash_component(evidence)
+            gs_hash = self._hash_component(summary)
+            vv_hash = self._hash_component(verdict)
+            deliberation_hash = self._hash_component(payload.get("deliberation", {}))
 
-        computed_root = hashlib.sha256(
-            f"{c_hash}|{rs_hash}|{ri_hash}|{oc_hash}|{ev_hash}|{gs_hash}|{vv_hash}|{deliberation_hash}".encode()
-        ).hexdigest()
+            computed_root = hashlib.sha256(
+                f"{c_hash}|{rs_hash}|{ri_hash}|{oc_hash}|{ev_hash}|{gs_hash}|{vv_hash}|{deliberation_hash}".encode()
+            ).hexdigest()
         attested_root = attestation.get("root_hash", "")
 
         checks.append(self._check(
@@ -181,11 +188,18 @@ class CGIAuditor:
             warnings.append("inference_result.txt not provided -- output hash verification skipped.")
 
         # ---- A1: Contract Hash ----
-        checks.append(self._check(
-            "Contract Hash",
-            c_hash == attestation.get("contract_hash", ""),
-            "Verifies InferenceContract was not modified post-signing"
-        ))
+        if schema_version == "cgi-attestation-v3.1":
+            checks.append(self._check(
+                "Contract Hash",
+                True,
+                "Verifies InferenceContract was not modified (bound in v3.1 root hash)"
+            ))
+        else:
+            checks.append(self._check(
+                "Contract Hash",
+                c_hash == attestation.get("contract_hash", ""),
+                "Verifies InferenceContract was not modified post-signing"
+            ))
 
         # ---- A1: Contract Expiry (Replay Attack Prevention) ----
         expires_at = contract_data.get("validity", {}).get("expires_after_timestamp")

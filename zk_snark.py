@@ -120,7 +120,16 @@ def verify_inference_proof(proof: dict[str, Any], public_signal: str) -> bool:
         if proof.get("protocol") != "halo2":
             return False
             
-        if USE_REAL_CIRCUIT and not proof.get("is_mock"):
+        # FIX H-6: The verifier previously trusted `proof.get("is_mock")` to skip
+        # actual cryptographic verification. This allowed an attacker to bypass
+        # the real circuit in production by submitting a fake mock proof.
+        # Now, if USE_REAL_CIRCUIT is True, we STRICTLY require a real proof and
+        # reject any proof that claims to be a mock.
+        if USE_REAL_CIRCUIT:
+            if proof.get("is_mock"):
+                print("[ZK-SNARK] REJECTED: Mock proofs are not permitted in production.")
+                return False
+                
             print("[ZK-SNARK] Verifying real Halo2 proof via EZKL...")
             proof_path = os.path.join(ARTIFACTS_DIR, "proof.json")
             with open(proof_path, 'w') as f:
@@ -134,6 +143,11 @@ def verify_inference_proof(proof: dict[str, Any], public_signal: str) -> bool:
             if hasattr(res, '__await__'):
                 res = asyncio.run(res)
             return res
+
+        # Fallback for testing when USE_REAL_CIRCUIT = False
+        if not proof.get("is_mock"):
+            print("[ZK-SNARK] REJECTED: Expected a mock proof in test mode.")
+            return False
 
         # Re-verify the mathematical binding (Mock validation)
         expected_proof = f"0x{hashlib.sha256((public_signal + 'proof_data').encode()).hexdigest()}"

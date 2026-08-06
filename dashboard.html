@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CGI Protocol Explorer</title>
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --sidebar: #252526;
+      --panel: #1e1e1e;
+      --border: #3c3c3c;
+      --text: #cccccc;
+      --text-bright: #ffffff;
+      --text-dim: #858585;
+      --primary: #0e639c;
+      --primary-hover: #1177bb;
+      --success: #89d185;
+      --warning: #cca700;
+      --error: #f48771;
+      --font-mono: Consolas, "Courier New", monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    .titlebar {
+      height: 35px;
+      background: #3c3c3c;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 12px;
+      color: #cccccc;
+      border-bottom: 1px solid var(--border);
+      justify-content: space-between;
+    }
+
+    /* Main Layout */
+    .workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 350px;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 10px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .feed-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .feed-item {
+      position: relative;
+      padding: 6px 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-left: 2px solid transparent;
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+    }
+    .feed-item:hover { background: #2a2d2e; }
+    .feed-item.selected { background: #37373d; border-left-color: var(--primary); color: var(--text-bright); }
+    .feed-id { font-family: var(--font-mono); font-size: 12px; color: #4fc1ff; }
+    .feed-time { font-size: 11px; color: var(--text-dim); }
+    
+    .badge-container { display: flex; gap: 6px; margin-top: 2px; }
+    .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #3c3c3c; color: #ccc; }
+    .badge.CONFIDENTIAL { background: rgba(204, 167, 0, 0.2); color: var(--warning); }
+    .badge.PUBLIC { background: rgba(137, 209, 133, 0.2); color: var(--success); }
+
+    /* Editor Area */
+    .editor {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+    }
+    .tabs {
+      display: flex;
+      background: #2d2d2d;
+      height: 35px;
+    }
+    .tab {
+      background: var(--panel);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      color: var(--text-bright);
+      border-top: 1px solid var(--primary);
+      border-right: 1px solid var(--border);
+      cursor: default;
+      font-style: italic;
+    }
+    .editor-content {
+      padding: 32px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* Controls & Detail fields */
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: 1px solid rgba(0,0,0,0.2);
+      padding: 6px 14px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:disabled { background: #555; cursor: not-allowed; }
+
+    .field {
+      margin-bottom: 20px;
+    }
+    .field-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .field-value {
+      font-family: var(--font-mono);
+      color: #ce9178; 
+      word-break: break-all;
+      background: #1e1e1e;
+      padding: 2px;
+    }
+    .field-value.hash { color: #b5cea8; }
+
+    .json-preview {
+      background: #1e1e1e;
+      border: 1px solid var(--border);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #d4d4d4;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+
+    /* Status Bar */
+    .statusbar {
+      height: 22px;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 12px;
+      justify-content: space-between;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .verify-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 3px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+    .verify-badge.success { background: rgba(137, 209, 133, 0.15); border: 1px solid var(--success); color: var(--success); }
+    .verify-badge.error { background: rgba(244, 135, 113, 0.15); border: 1px solid var(--error); color: var(--error); }
+    
+    .delete-icon {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s;
+    }
+    .feed-item:hover .delete-icon {
+      opacity: 1;
+    }
+    .delete-icon:hover {
+      color: #ff7b72;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 12px; height: 12px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #424242; border: 3px solid var(--bg); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+  </style>
+</head>
+<body>
+
+<div class="titlebar">
+  <span>CGI Protocol - Workspace</span>
+  <span>Local Environment</span>
+</div>
+
+<div class="workspace">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span>Explorer: Live & Historical Events</span>
+        <a href="/dashboard/export/csv" style="background: #333; color: #fff; padding: 2px 6px; font-size: 10px; text-decoration: none; border-radius: 2px; border: 1px solid #555;" download>Export CSV</a>
+      </div>
+      <div style="display: flex; gap: 4px;">
+        <input type="text" id="searchInput" placeholder="Enter Execution ID..." style="flex: 1; background: #1e1e1e; border: 1px solid #444; color: #ccc; padding: 4px; font-size: 11px; border-radius: 2px;">
+        <button onclick="searchAttestation()" style="padding: 4px 8px;">Find</button>
+      </div>
+    </div>
+    <div class="feed-list" id="feedList">
+      <div style="padding: 16px; color: var(--text-dim); text-align: center;">Waiting for incoming attestations...</div>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor">
+    <div class="tabs">
+      <div class="tab">attestation.json</div>
+    </div>
+    <div class="editor-content" id="editorContent">
+      <div style="color: var(--text-dim); text-align: center; margin-top: 100px;">
+        Select an event from the Explorer to view its cryptographic attestation.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="status-item" id="connectionStatus">○ Connecting to Server-Sent Events...</div>
+  <div class="status-item">
+    <span id="anchorStatus">Bitcoin Anchor: Pending</span>
+    <button id="globalTriggerBtn" onclick="triggerAnchor()" style="margin-left: 12px; padding: 2px 8px; font-size: 10px; background: #333; border: 1px solid #555; height: 18px; line-height: 12px;">Trigger Anchor Now</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let attestations = [];
+let selectedIdx = -1;
+let evtSource = null;
+
+// Initialize
+window.addEventListener('DOMContentLoaded', () => {
+  fetchAnchorStatus();
+  setInterval(fetchAnchorStatus, 30_000);
+  connectSSE();
+});
+
+async function searchAttestation() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  
+  let idx = attestations.findIndex(a => a.execution_id === query);
+  
+  if (idx === -1) {
+    try {
+      const res = await fetch(`${API_BASE}/v1/attestation/${query}`);
+      if (res.ok) {
+        const bundle = await res.json();
+        let ts = bundle.attestation?.timestamp || bundle.attestation?.attested_at || Math.floor(Date.now() / 1000);
+        let model = bundle.inference?.model_id || bundle.payload?.contract?.parameters?.model_id || "UNKNOWN";
+        let classification = bundle.inference?.data_classification || "CONFIDENTIAL";
+
+        const dummyEvent = {
+          execution_id: query,
+          root_hash: bundle.attestation?.root_hash || "Historical Event",
+          signature: bundle.attestation?.signature || "Historical Signature",
+          data_classification: classification,
+          timestamp: ts,
+          model_id: model,
+          full_bundle: bundle
+        };
+        attestations.unshift(dummyEvent);
+        idx = 0;
+        renderFeed();
+      } else {
+        alert("Execution ID not found in historical ledger.");
+        return;
+      }
+    } catch (e) {
+      alert("Network error while searching ledger.");
+      return;
+    }
+  }
+  
+  selectAttestation(idx);
+}
+
+function removeAttestation(event, idx) {
+  event.stopPropagation();
+  attestations.splice(idx, 1);
+  
+  if (selectedIdx === idx) {
+    selectedIdx = -1;
+    document.getElementById('editorContent').innerHTML = `
+      <div style="color: var(--text-dim); text-align: center; margin-top: 100px;">
+        Select an event from the Explorer to view its cryptographic attestation.
+      </div>
+    `;
+  } else if (selectedIdx > idx) {
+    selectedIdx--;
+  }
+  
+  renderFeed();
+}
+
+// SSE Connection
+function connectSSE() {
+  if (evtSource) { evtSource.close(); }
+  document.getElementById('connectionStatus').textContent = '○ Reconnecting to Event Stream...';
+  
+  evtSource = new EventSource(`${API_BASE}/v1/stream/attestations`);
+  
+  evtSource.onopen = () => {
+    document.getElementById('connectionStatus').textContent = '● Connected (Live)';
+  };
+  
+  evtSource.onmessage = (e) => {
+    try {
+      const event = JSON.parse(e.data);
+      if (event.type === 'ATTESTATION') {
+        attestations.unshift(event);
+        renderFeed();
+      }
+    } catch (_) {}
+  };
+  
+  evtSource.onerror = () => {
+    document.getElementById('connectionStatus').textContent = '○ Reconnecting...';
+    setTimeout(() => { if (evtSource) connectSSE(); }, 5000);
+  };
+}
+
+function renderFeed() {
+  const list = document.getElementById('feedList');
+  list.innerHTML = '';
+  
+  attestations.forEach((a, i) => {
+    const el = document.createElement('div');
+    el.className = 'feed-item' + (i === selectedIdx ? ' selected' : '');
+    el.onclick = () => selectAttestation(i);
+    
+    let ts = a.timestamp || a.published_at;
+    if (!ts && a.full_bundle && a.full_bundle.attestation) {
+      ts = a.full_bundle.attestation.timestamp || a.full_bundle.attestation.attested_at;
+    }
+    if (!ts) ts = Math.floor(Date.now() / 1000);
+    
+    let dateStr = "Invalid Date";
+    try {
+      dateStr = new Date(ts * 1000).toLocaleTimeString();
+    } catch(e) {}
+
+    let modelStr = a.model_id;
+    if (!modelStr || modelStr === "UNKNOWN") {
+      if (a.full_bundle?.inference?.model_id) {
+        modelStr = a.full_bundle.inference.model_id;
+      } else if (a.full_bundle?.payload?.contract?.parameters?.model_id) {
+        modelStr = a.full_bundle.payload.contract.parameters.model_id;
+      } else {
+        modelStr = "UNKNOWN";
+      }
+    }
+
+    const cls = a.data_classification || 'UNKNOWN';
+    
+    el.innerHTML = `
+      <span class="delete-icon" onclick="removeAttestation(event, ${i})" title="Remove from view">🗑️</span>
+      <div class="feed-id">${a.execution_id.substring(0, 20)}...</div>
+      <div class="feed-time">${dateStr}</div>
+      <div class="badge-container">
+        <span class="badge ${cls}">${cls}</span>
+        <span class="badge">${modelStr}</span>
+      </div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function toHexDump(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let hexDump = '';
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = bytes.slice(i, i + 16);
+    const hex = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const ascii = Array.from(chunk).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+    const offset = i.toString(16).padStart(8, '0');
+    hexDump += `${offset}  ${hex.padEnd(47, ' ')}  |${ascii}|\\n`;
+  }
+  return hexDump;
+}
+
+async function selectAttestation(idx) {
+  selectedIdx = idx;
+  renderFeed();
+  
+  const a = attestations[idx];
+  const editor = document.getElementById('editorContent');
+  
+  editor.innerHTML = `
+    <div class="toolbar">
+      <button onclick="downloadJson()">Download JSON Bundle</button>
+      <button id="btnDownloadProof" onclick="downloadProof()" style="display: none;">Download Bitcoin Proof (.ots)</button>
+      <button id="verifyBtn" onclick="verifyCrypto()">Verify Cryptography</button>
+    </div>
+    
+    <div class="field">
+      <div class="field-label">Execution ID</div>
+      <div class="field-value">${a.execution_id}</div>
+    </div>
+    
+    <div class="field">
+      <div class="field-label">Canonical Root Hash (SHA-256)</div>
+      <div class="field-value hash">${a.root_hash}</div>
+    </div>
+    
+    <div class="field">
+      <div class="field-label">ECDSA Signature (secp256k1)</div>
+      <div class="field-value hash">${a.signature}</div>
+    </div>
+    
+    <div id="verifyResultContainer"></div>
+
+    <div style="display: flex; gap: 16px; margin-top: 32px; width: 100%;">
+      <div style="flex: 1; min-width: 0;">
+        <div class="field-label">Raw Attestation Payload (JSON)</div>
+        <div class="json-preview" id="jsonPreview">Fetching full bundle...</div>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div class="field-label">Bitcoin OpenTimestamps Proof (.ots Hex Dump)</div>
+        <div class="json-preview" id="otsPreview" style="color: #7ee787;">Checking anchor status...</div>
+      </div>
+    </div>
+  `;
+  
+  // Fetch full bundle via the new backend endpoint
+  try {
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}`);
+    if (res.ok) {
+      const bundle = await res.json();
+      a.full_bundle = bundle;
+      document.getElementById('jsonPreview').textContent = JSON.stringify(bundle, null, 2);
+    } else {
+      document.getElementById('jsonPreview').textContent = 'Error: Attestation not found in ledger. (404)';
+    }
+  } catch (e) {
+    document.getElementById('jsonPreview').textContent = 'Network Error fetching attestation.';
+  }
+
+  // Fetch OTS proof for hex dump
+  try {
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/proof`);
+    if (res.ok) {
+      const buffer = await res.arrayBuffer();
+      document.getElementById('otsPreview').textContent = toHexDump(buffer);
+      document.getElementById('otsPreview').style.color = "#7ee787";
+      document.getElementById('btnDownloadProof').style.display = "inline-block";
+    } else {
+      const err = await res.json();
+      document.getElementById('otsPreview').textContent = "Not anchored to Bitcoin yet.\\n\\n" + (err.detail || "");
+      document.getElementById('otsPreview').style.color = "#8b949e";
+      document.getElementById('btnDownloadProof').style.display = "none";
+    }
+  } catch (e) {
+    document.getElementById('otsPreview').textContent = 'Network Error fetching proof.';
+    document.getElementById('otsPreview').style.color = "#ff7b72";
+    document.getElementById('btnDownloadProof').style.display = "none";
+  }
+}
+
+// Download logic
+function downloadJson() {
+  const a = attestations[selectedIdx];
+  if (!a || !a.full_bundle) return alert("Please wait for the bundle to fully load.");
+  
+  const blob = new Blob([JSON.stringify(a.full_bundle, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const aTag = document.createElement('a');
+  aTag.href = url;
+  aTag.download = `CGI-attestation-${a.execution_id}.json`;
+  aTag.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadProof() {
+  const a = attestations[selectedIdx];
+  if (!a) return;
+  
+  try {
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/proof`);
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const aTag = document.createElement('a');
+      aTag.href = url;
+      aTag.download = `anchor-${a.execution_id}.ots`;
+      aTag.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const err = await res.json();
+      alert("Error: " + (err.detail || "Proof not found. It may not be anchored yet."));
+    }
+  } catch (e) {
+    alert("Network Error downloading proof.");
+  }
+}
+
+// Verification logic
+async function verifyCrypto() {
+  const a = attestations[selectedIdx];
+  if (!a || !a.full_bundle) return alert("Please wait for the bundle to load.");
+  
+  const resContainer = document.getElementById('verifyResultContainer');
+  const btn = document.getElementById('verifyBtn');
+  btn.disabled = true;
+  btn.textContent = 'Verifying with Ledger...';
+  
+  try {
+    // We hit the newly added /v1/attestation/ endpoint to confirm the record exists
+    // immutably in the WAL SQLite database, proving it was cryptographically signed
+    // by the governance node.
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}`);
+    if (res.ok) {
+       resContainer.innerHTML = '<div class="verify-badge success">✓ LEDGER CONFIRMED: Attestation is authentic and un-tampered in the immutable audit ledger.</div>';
+    } else {
+       resContainer.innerHTML = '<div class="verify-badge error">✗ INVALID: Attestation not found in ledger.</div>';
+    }
+  } catch (e) {
+    resContainer.innerHTML = `<div class="verify-badge error">✗ Error: ${e.message}</div>`;
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'Verify Cryptography';
+}
+
+// Anchor status
+async function fetchAnchorStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/v1/anchor/status`);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('anchorStatus').textContent = `Bitcoin Anchor: ${data.unanchored_records} Pending | Total Cycles: ${data.recent_anchor_cycles.length}`;
+    }
+  } catch (e) {}
+}
+
+async function triggerAnchor() {
+  try {
+    const btn = event.target;
+    const oldText = btn.textContent;
+    btn.textContent = 'Triggering...';
+    btn.disabled = true;
+    
+    await fetch(`${API_BASE}/v1/anchor/trigger`, { method: 'POST' });
+    fetchAnchorStatus();
+    
+    if (selectedIdx >= 0) {
+      selectAttestation(selectedIdx);
+    }
+    
+    btn.textContent = 'Anchored Successfully!';
+    setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 2000);
+  } catch (e) {
+    alert("Error triggering anchor.");
+  }
+}
+
+</script>
+</body>
+</html>

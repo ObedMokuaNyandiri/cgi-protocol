@@ -8,7 +8,7 @@ from typing import Any
 class ContractVersion:
     protocol_version: str = "3.1"
     contract_schema: str = "cgi-attestation-v3.1"
-    assurance_level: str = "A5"
+    assurance_level: str = "A1"
 
 @dataclass
 class ExecutionClaims:

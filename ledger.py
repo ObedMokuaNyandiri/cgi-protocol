@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger("cgi.ledger")
 
 # Schema version — bump this when adding new columns
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 
 class AuditLedger:
@@ -40,7 +40,11 @@ class AuditLedger:
 
     def __init__(self, db_path: str):
         self._db_path = db_path
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        # FIX H-5: os.path.dirname() returns "" for bare filenames (e.g. "audit.db").
+        # os.makedirs("") raises FileNotFoundError, crashing the ledger at boot.
+        d = os.path.dirname(db_path)
+        if d:
+            os.makedirs(d, exist_ok=True)
         self._init_db()
 
     @contextmanager
@@ -124,6 +128,35 @@ class AuditLedger:
                 )
                 logger.info("Ledger schema migrated to v2 (Security columns)")
 
+            if current_version < 3:
+                # Blockchain anchoring support
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS anchor_log (
+                        anchor_id       TEXT PRIMARY KEY,
+                        anchored_at     REAL NOT NULL,
+                        merkle_root     TEXT NOT NULL,
+                        record_count    INTEGER NOT NULL,
+                        ots_servers     TEXT NOT NULL,
+                        ots_proof_path  TEXT,
+                        status          TEXT NOT NULL DEFAULT 'PENDING'
+                    )
+                """)
+                # Column to track which attestations have been anchored
+                try:
+                    cursor.execute(
+                        "ALTER TABLE attestations ADD COLUMN anchor_id TEXT DEFAULT NULL"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_attestations_anchor "
+                    "ON attestations(anchor_id)"
+                )
+                cursor.execute(
+                    "INSERT OR IGNORE INTO schema_version (version) VALUES (3)"
+                )
+                logger.info("Ledger schema migrated to v3 (Blockchain Anchor columns)")
+
             conn.commit()
 
     def record_attestation(
@@ -187,6 +220,24 @@ class AuditLedger:
                 return json.loads(row[0])
             return None
 
+    def get_anchor_proof_path(self, execution_id: str) -> str | None:
+        """Retrieve the file path of the OTS anchor proof for an execution ID."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT l.ots_proof_path
+                FROM attestations a
+                JOIN anchor_log l ON a.anchor_id = l.anchor_id
+                WHERE a.execution_id = ? AND l.ots_proof_path IS NOT NULL
+                ''',
+                (execution_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+            return None
+
     def export_audit_log(
         self,
         limit: int = 100,
@@ -232,6 +283,35 @@ class AuditLedger:
                 for row in rows
             ]
 
+    def export_audit_log_stream(self) -> 'typing.Iterator[dict]':
+        """
+        Generator that yields audit log entries one by one for streaming.
+        Handles millions of records without OOM.
+        """
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT execution_id, timestamp, root_hash, request_id,
+                       user_id, data_classification, anchor_id
+                FROM attestations
+                ORDER BY timestamp DESC
+                """
+            )
+            while True:
+                rows = cursor.fetchmany(1000)
+                if not rows:
+                    break
+                for row in rows:
+                    yield {
+                        "execution_id": row["execution_id"],
+                        "timestamp_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(row["timestamp"])),
+                        "root_hash": row["root_hash"],
+                        "request_id": row["request_id"],
+                        "user_id": row["user_id"],
+                        "data_classification": row["data_classification"],
+                        "anchor_id": row["anchor_id"],
+                    }
     def count(self, classification: str | None = None) -> int:
         """Count total attestations, optionally filtered by classification."""
         with self._connect() as conn:
@@ -244,6 +324,108 @@ class AuditLedger:
             else:
                 cursor.execute("SELECT COUNT(*) FROM attestations")
             return cursor.fetchone()[0]
+
+    # ──────────────────────────────────────────────────────────────
+    # Blockchain Anchoring Methods (Schema v3)
+    # ──────────────────────────────────────────────────────────────
+
+    def get_unanchored_records(self) -> list[dict]:
+        """Return all attestation records that have not yet been blockchain-anchored."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT execution_id, timestamp, root_hash "
+                "FROM attestations WHERE anchor_id IS NULL "
+                "ORDER BY timestamp ASC"
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "execution_id": row["execution_id"],
+                    "timestamp": row["timestamp"],
+                    "root_hash": row["root_hash"],
+                }
+                for row in rows
+            ]
+
+    def mark_records_anchored(self, execution_ids: list[str], anchor_id: str) -> int:
+        """Mark a batch of attestations as anchored. Returns count updated."""
+        if not execution_ids:
+            return 0
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            placeholders = ",".join("?" * len(execution_ids))
+            cursor.execute(
+                f"UPDATE attestations SET anchor_id = ? "
+                f"WHERE execution_id IN ({placeholders})",
+                [anchor_id] + execution_ids,
+            )
+            conn.commit()
+            updated = cursor.rowcount
+            logger.info("ANCHOR_MARKED | anchor_id=%s records=%d", anchor_id, updated)
+            return updated
+
+    def write_anchor_record(
+        self,
+        anchor_id: str,
+        merkle_root: str,
+        record_count: int,
+        ots_servers: list[str],
+        ots_proof_path: str | None = None,
+        status: str = "PENDING",
+    ) -> None:
+        """Write a new anchor cycle result to the anchor_log table."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO anchor_log
+                    (anchor_id, anchored_at, merkle_root, record_count,
+                     ots_servers, ots_proof_path, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    anchor_id,
+                    time.time(),
+                    merkle_root,
+                    record_count,
+                    json.dumps(ots_servers),
+                    ots_proof_path,
+                    status,
+                ),
+            )
+            conn.commit()
+            logger.info(
+                "ANCHOR_RECORD | anchor_id=%s root=%s records=%d status=%s",
+                anchor_id, merkle_root[:16], record_count, status,
+            )
+
+    def get_anchor_status(self, limit: int = 10) -> list[dict]:
+        """Return recent anchor cycle records for the /v1/anchor/status endpoint."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT anchor_id, anchored_at, merkle_root, record_count, "
+                "ots_servers, ots_proof_path, status "
+                "FROM anchor_log ORDER BY anchored_at DESC LIMIT ?",
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "anchor_id": row["anchor_id"],
+                    "anchored_at": row["anchored_at"],
+                    "anchored_at_iso": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(row["anchored_at"])
+                    ),
+                    "merkle_root": row["merkle_root"],
+                    "record_count": row["record_count"],
+                    "ots_servers": json.loads(row["ots_servers"]),
+                    "ots_proof_path": row["ots_proof_path"],
+                    "status": row["status"],
+                }
+                for row in rows
+            ]
 
     def close(self) -> None:
         """Explicit close — called during app shutdown."""

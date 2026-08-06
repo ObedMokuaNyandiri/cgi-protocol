@@ -19,7 +19,7 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Iterator
 
 logger = logging.getLogger("cgi.ledger")
 
@@ -283,7 +283,7 @@ class AuditLedger:
                 for row in rows
             ]
 
-    def export_audit_log_stream(self) -> 'typing.Iterator[dict]':
+    def export_audit_log_stream(self) -> Iterator[dict[str, Any]]:
         """
         Generator that yields audit log entries one by one for streaming.
         Handles millions of records without OOM.

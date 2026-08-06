@@ -28,11 +28,9 @@ COPY adapters/ ./adapters/
 COPY zk/ ./zk/
 COPY circuits/ ./circuits/
 COPY auth/ ./auth/
-COPY models/ ./models/
-COPY enclave/ ./enclave/
 
 # Create required directories with correct ownership
-RUN mkdir -p /app/auth /app/outputs /app/logs /app/data && \
+RUN mkdir -p /app/auth /app/outputs /app/logs /app/data /app/models /app/enclave && \
     chown -R cgi:cgi /app
 
 # Switch to non-root user

@@ -29,8 +29,7 @@ COPY zk/ ./zk/
 COPY circuits/ ./circuits/
 COPY auth/ ./auth/
 COPY models/ ./models/
-# Note: enclave/ is optional — skip if not present
-COPY enclave/ ./enclave/ 2>/dev/null || true
+COPY enclave/ ./enclave/
 
 # Create required directories with correct ownership
 RUN mkdir -p /app/auth /app/outputs /app/logs /app/data && \

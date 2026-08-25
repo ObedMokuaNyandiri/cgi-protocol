@@ -73,11 +73,13 @@ class AnthropicClaudeAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
     ) -> Tuple[str, str, int]:
         """Call the Anthropic Messages API."""
+        active_model = model_id if model_id else self._model_id
         headers = {
             "Content-Type": "application/json",
             "x-api-key": self._api_key,
@@ -85,7 +87,7 @@ class AnthropicClaudeAdapter(BaseAdapter):
         }
 
         body = {
-            "model": self._model_id,
+            "model": active_model,
             "max_tokens": max_tokens,
             "system": self._system_prompt,
             "messages": [

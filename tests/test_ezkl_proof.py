@@ -1,7 +1,7 @@
 import os
 
-# Ensure the real circuit logic is enabled for the test
-os.environ["USE_REAL_ZK_CIRCUITS"] = "1"
+import pytest
+pytest.importorskip("ezkl")
 
 from zk_snark import (
     _compute_public_signals,

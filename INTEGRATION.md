@@ -1,5 +1,31 @@
 # CGI Protocol — AI Model Integration Guide
 
+CGI Protocol
+
+1. [Deploying a Local Model with vLLM](#deploying-a-local-model-with-vllm)
+2. [Using Remote Cloud APIs](#using-remote-cloud-apis)
+3. [Operations & Maintenance](#operations--maintenance)
+
+## Operations & Maintenance
+
+### Secret Management
+By default, the CGI-Protocol generates and stores a governance ECDSA private key as a PEM file on disk (`auth/private_key.pem`). 
+In production (e.g., Kubernetes), bake the application into a Docker container and provide the private key via the `CGI_PRIVATE_KEY` environment variable (using Vault or Docker Secrets). The system will automatically prioritize the environment variable over disk files.
+
+### Multi-Worker Deployments
+Because the CGI-Protocol utilizes SQLite with Write-Ahead Logging (WAL) and has migrated stateful rate limits to the database, the API gateway is safe to run with multiple workers.
+By default, `API_WORKERS` is configured to `os.cpu_count() - 1`. If you run behind a load balancer with multiple containers, note that the rate limit and replay cache are currently bound to the local SQLite file. For distributed deployments, you should mount the SQLite volume (`data/audit_ledger.db`) via an NFS/EFS share or refactor `ledger.py` to use PostgreSQL.
+
+### Database Backups (Zero-Downtime)
+The SQLite ledger serves as your immutable audit trail. Do not rely on file-system backups while the server is running, as it may corrupt the WAL state.
+Instead, use the included online backup script which leverages the SQLite backup API:
+```bash
+python script/backup_ledger.py
+```
+Run this on a cron schedule. It will safely copy the database to `data/backups/audit_ledger_backup_YYYYMMDD_HHMMSS.db` without locking the API gateway.
+
+---
+
 CGI Protocol wraps any AI model with cryptographic governance: signed attestations, audit trails, constraint violation detection, and blockchain anchoring — regardless of which model or cloud provider you use.
 
 ## Quick-Start: Choose Your Backend
@@ -14,7 +40,7 @@ CGI Protocol wraps any AI model with cryptographic governance: signed attestatio
 | Mistral AI | `mistral` | `AI_API_KEY=` |
 | Together AI | `together_ai` | `AI_API_KEY=` |
 | HuggingFace API | `huggingface_api` | `AI_API_KEY=hf_...`, `MODEL_ID=mistralai/...` |
-| AWS Bedrock | `bedrock` | AWS credentials, `MODEL_ID=anthropic.claude-...` |
+
 | Cohere Command R | `cohere` | `AI_API_KEY=` |
 | Ollama (local) | `ollama_local` | Ollama running (`ollama serve`) |
 | vLLM server | `vllm_local` | vLLM running on port 8000 |
@@ -165,30 +191,7 @@ AI_ENDPOINT_URL=https://your-endpoint.endpoints.huggingface.cloud/v1/chat/comple
 
 ---
 
-### AWS Bedrock
 
-Requires `boto3`: `pip install boto3`
-
-```env
-AI_BACKEND_TYPE=bedrock
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-AWS_DEFAULT_REGION=us-east-1
-MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
-```
-
-Available model IDs:
-| Model | Bedrock ID |
-|-------|-----------|
-| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
-| Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` |
-| Llama 3.3 70B | `meta.llama3-3-70b-instruct-v1:0` |
-| Mistral Large | `mistral.mistral-large-2402-v1:0` |
-| Amazon Titan Text | `amazon.titan-text-express-v1` |
-
-> **Note**: The model must be enabled in your AWS region. Go to AWS Console → Bedrock → Model access.
-
----
 
 ### Cohere Command R
 
@@ -347,7 +350,7 @@ Before going to production, verify the following:
 [ ] LICENSE_ENFORCEMENT=ENFORCE and LICENSE_KEY_PATH is set
 [ ] API_KEYS_FILE=auth/api_keys.json and at least one key generated
 [ ] CORS_ORIGINS set to your specific frontend domain (not [] or ["*"])
-[ ] ENCLAVE_MODE=software (or nitro for AWS)
+[ ] ENCLAVE_MODE=software
 [ ] ANCHOR_ENABLED=true for blockchain audit trail
 [ ] ENABLE_SENSITIVE_ENCRYPTION=true for PII/CLASSIFIED data
 [ ] Docker runs as non-root user (already configured in Dockerfile)
@@ -394,6 +397,6 @@ python client_sdk.py
 | `Cannot reach Ollama at localhost:11434` | Ollama not running | Run `ollama serve` |
 | `Authentication is not configured` | No API keys file | Run `python auth/keygen.py --api-key "My Org"` |
 | `Model 'xyz' not allowed` | Model not in ALLOWED_MODELS | Add to ALLOWED_MODELS or use LICENSE_ENFORCEMENT=DISABLED |
-| `AWS Bedrock requires boto3` | Missing dependency | `pip install boto3` |
+
 | `License EXPIRED` | License file past expiry | Contact your CGI Protocol vendor to renew |
 | `HuggingFace model loading (503)` | Model warming up | Wait 20-60s and retry |

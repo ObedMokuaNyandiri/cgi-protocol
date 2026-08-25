@@ -9,9 +9,16 @@ build/
 venv/
 .venv/
 
+# ── Cython / C Extensions ─────────────
+*.c
+*.so
+*.pyd
+
 # ── Secrets & Keys ────────────────────
 auth/private_key.pem
 auth/public_key.pem
+auth/issuer_private.pem
+auth/issuer_public.pem
 auth/api_keys.json
 .env
 

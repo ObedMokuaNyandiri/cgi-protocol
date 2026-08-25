@@ -77,6 +77,7 @@ class HuggingFaceInferenceAPIAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
@@ -92,8 +93,9 @@ class HuggingFaceInferenceAPIAdapter(BaseAdapter):
             {"role": "user", "content": prompt},
         ]
 
+        active_model = model_id if model_id else self._model_id
         body = {
-            "model": self._model_id,
+            "model": active_model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": self._temperature,
@@ -101,6 +103,9 @@ class HuggingFaceInferenceAPIAdapter(BaseAdapter):
             "stream": False,
         }
 
+        # Some HF serverless setups need the model in the URL, others rely on the payload.
+        # If url doesn't explicitly have the model in it, we might want to adapt it,
+        # but HF's standard /v1/chat/completions route respects the "model" JSON field.
         req = urllib.request.Request(
             self._url if "/chat/completions" in self._url
             else f"{self._url}/v1/chat/completions",

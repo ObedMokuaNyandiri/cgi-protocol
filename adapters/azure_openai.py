@@ -73,12 +73,8 @@ class AzureOpenAIAdapter(BaseAdapter):
                 "Find it in Azure Portal → OpenAI resource → Keys and Endpoint."
             )
 
-        self._url = (
-            f"https://{self._resource}.openai.azure.com"
-            f"/openai/deployments/{self._deployment}"
-            f"/chat/completions?api-version={self._api_version}"
-        )
-        logger.info("AZURE_OPENAI | url=%s", self._url)
+        # URL is constructed dynamically in generate()
+        logger.info("AZURE_OPENAI | resource=%s", self._resource)
 
     # ─────────────────────────────────────────────────────────
     # Public interface
@@ -87,6 +83,7 @@ class AzureOpenAIAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
@@ -96,6 +93,13 @@ class AzureOpenAIAdapter(BaseAdapter):
             "Content-Type": "application/json",
             "api-key": self._api_key,   # Azure uses api-key, not Authorization: Bearer
         }
+        
+        active_deployment = model_id if model_id else self._deployment
+        url = (
+            f"https://{self._resource}.openai.azure.com"
+            f"/openai/deployments/{active_deployment}"
+            f"/chat/completions?api-version={self._api_version}"
+        )
 
         payload = {
             "messages": [
@@ -108,7 +112,7 @@ class AzureOpenAIAdapter(BaseAdapter):
         }
 
         req = urllib.request.Request(
-            self._url,
+            url,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
             method="POST",

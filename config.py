@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -58,6 +58,11 @@ class Settings(BaseSettings):
         return os.path.join(self.OUTPUT_DIR, "chain.jsonl")
 
     @property
+    def IS_DOCKER(self) -> bool:
+        """Returns True if the application is running inside a Docker container."""
+        return os.path.exists("/.dockerenv")
+
+    @property
     def DB_PATH(self) -> str:
         return os.path.join(self.BASE_DIR, "data", "audit_ledger.db")
 
@@ -68,7 +73,7 @@ class Settings(BaseSettings):
     # ── API Server ────────────────────────────────────────────────
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    API_WORKERS: int = 1  # SQLite + subprocess = single worker only
+    API_WORKERS: int = 1  # Fix HIGH-1: Default to 1 to prevent SQLite write contention
     API_TITLE: str = "CGI Protocol — Universal Verifiable AI"
     API_VERSION: str = "2.1.0"
     DOMAIN_CONTEXT: str = "GENERAL"  # MEDICAL | LEGAL | FINANCIAL | GOVERNMENT | MEDIA | GENERAL
@@ -77,7 +82,7 @@ class Settings(BaseSettings):
     # ENFORCE  = hard fail if license missing/invalid (production default)
     # WARN     = log warning but start anyway (development only)
     # DISABLED = skip all license checks (open source / self-hosted)
-    LICENSE_ENFORCEMENT: str = "ENFORCE"    # Use DISABLED for open-source deployments
+    LICENSE_ENFORCEMENT: str = "DISABLED"
     LICENSE_KEY_PATH: str = ""               # Path to the client's license_*.json file
     ISSUER_PUBLIC_KEY_PATH: str = ""         # Path to issuer_public.pem (embedded in your Docker image)
 
@@ -96,12 +101,13 @@ class Settings(BaseSettings):
     # An empty list means no cross-origin requests are allowed (secure default).
     # For local dev only, set CORS_ORIGINS=["http://localhost:3000"] in .env
     CORS_ORIGINS: list[str] = Field(default_factory=list)  # Secure default: deny all cross-origin
-    MAX_PROMPT_LENGTH: int = 4096  # Characters (overridden by license tier)
+    MAX_PROMPT_LENGTH: int = 1000000  # Characters (overridden by license tier)
+    PRIVATE_KEY_PASSPHRASE: str = ""  # Passphrase for the governance private key
 
     # ── Worker / Inference ────────────────────────────────────
     # Supported backends (set AI_BACKEND_TYPE to one of these):
     #   Cloud:  gemini_native | openai_compatible | anthropic | azure_openai |
-    #           groq | mistral | together_ai | huggingface_api | bedrock | cohere
+    #           groq | mistral | together_ai | huggingface_api | cohere
     #   Local:  ollama_local | vllm_local | llamacpp_server | huggingface_local
     AI_BACKEND_TYPE: str = "gemini_native"
 
@@ -121,10 +127,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_DEPLOYMENT: str = "" # e.g. gpt-4o-deployment
     AZURE_API_VERSION: str = "2024-02-01"
 
-    # ── AWS Bedrock ──────────────────────────────────────
-    # Reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
-    # from the environment (standard AWS SDK convention).
-    # No extra settings needed here — boto3 handles credential resolution.
+
 
     MODEL_PATH: str = ""
     MODEL_ID: str = "gemini-2.5-flash"
@@ -133,11 +136,12 @@ class Settings(BaseSettings):
     # For local backends (ollama, vllm, llamacpp), set to [] to allow any model.
     ALLOWED_MODELS: list[str] = Field(default_factory=lambda: [
         # Google Gemini
-        "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro-latest",
+        "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro-latest",
         "gemini-1.5-flash-latest", "gemini-2.0-flash-exp",
         # OpenAI
         "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo",
         # Anthropic
+        "claude-3-opus-20240229", "claude-3-5-opus-latest",
         "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-3-5",
         "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
         # Groq
@@ -152,7 +156,7 @@ class Settings(BaseSettings):
         "deepseek-r1", "qwen2.5",
     ])
     WORKER_TIMEOUT_SECONDS: int = 600  # Kill worker after this
-    DEFAULT_MAX_TOKENS: int = 200
+    DEFAULT_MAX_TOKENS: int = 16384
     DEFAULT_SEED: int = 42
     DEFAULT_TEMPERATURE: float = 0.8
 
@@ -181,18 +185,24 @@ class Settings(BaseSettings):
         return os.path.join(self.OUTPUT_DIR, "anchor_proofs")
 
     # ── Enclave / Attestation ─────────────────────────────────────
-    ENCLAVE_MODE: str = "software"  # "software" | "nitro"
+    ENCLAVE_MODE: str = "software"  # "software"
     ENCLAVE_ID: str = "cgi-software-enclave-1"
 
     # ── Logging ───────────────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "json"  # "json" | "text"
+    LOG_FORMAT: str = "text"  # "json" | "text"
 
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    @model_validator(mode='after')
+    def enforce_encryption(self) -> 'Settings':
+        if self.DEFAULT_DATA_CLASSIFICATION in ("PII", "CONFIDENTIAL"):
+            self.ENABLE_SENSITIVE_ENCRYPTION = True
+        return self
 
 
 @lru_cache(maxsize=1)

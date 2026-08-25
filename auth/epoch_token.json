@@ -1,13 +1,13 @@
 {
   "token": {
-    "token_id": "epoch-f5572875",
-    "epoch_id": 29552,
+    "token_id": "epoch-9eb9fc64",
+    "epoch_id": 55213,
     "token_budget": 30,
-    "issued_at": 1785929552,
-    "expires": 1785933152,
+    "issued_at": 1786455213,
+    "expires": 1786458813,
     "scope": "epoch_execution",
     "contract": {
-      "execution_id": "exec-33834d17-798b-4c1b-a193-56948e0dae63",
+      "execution_id": "exec-02fac860-9b5c-47b6-ab24-c7139202b3f2",
       "prompt_hash": "665ecddc3829d805ed11f7c095885cbee430ee9773143e4100df2a6f8eb3f28a",
       "version": {
         "protocol_version": "3.1",
@@ -29,14 +29,14 @@
       "claims": {
         "model_identity": "sha256:qwen_0_5b",
         "execution_mode": "deterministic",
-        "network_policy": "deny-all",
+        "network_policy": "unverified",
         "tool_policy": "no-external-tools",
         "provenance": "complete",
         "policy_hash": "b09febaf0078928b5a0abc06f311811f64d6b80307d6f749836ab849f0d41afd"
       },
       "validity": {
         "max_clock_skew_ms": 5000,
-        "expires_after_timestamp": 1817465552
+        "expires_after_timestamp": 1817991213
       },
       "trust_assumptions": {
         "requires_secure_tee": true,
@@ -60,5 +60,5 @@
     },
     "prompt": "AGENT_ACTION"
   },
-  "signature": "MEUCIQDwbYBJnvfteJ5gWGdgRXLHj2zRXjFqOkEqbW//tp5URQIgMTfeOcrG5/wdgK/TAamW4k6B7MCOJFkCKFn2FPzpnds="
+  "signature": "MEUCIQCOw2xABn07Ap1eSeNWs/bTRhgEa+gnthmryalPcLxUGgIgGEqnhqVdhQImlH3nTS4xuBhmUTYeDPkthSpRHwaccKs="
 }

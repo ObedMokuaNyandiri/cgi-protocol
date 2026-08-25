@@ -115,16 +115,17 @@ def generate_demo_token(auth_dir: str, user_prompt: str) -> str:
         ),
         # FIX FLAW-009: explicit keyword args — no silent field order bug
         parameters=ContractParameters(
-            model_id="qwen_0_5b",
-            max_output_tokens=200,
-            temperature=0.8,
+            model_id="gemini-3.5-flash",
+            max_output_tokens=300,
+            temperature=0.7,
             seed=42,
-            required_data_sources=[],
+            data_classification="CONFIDENTIAL",
+            purpose_of_use="GENERAL"
         ),
         claims=ExecutionClaims(
-            model_identity="sha256:qwen_0_5b",
+            model_identity="sha256:gemini-3.5-flash",
             execution_mode="deterministic",
-            network_policy="deny-all",
+            network_policy="unverified",
             tool_policy="no-external-tools",
             provenance="complete",
             policy_hash="sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -210,7 +211,6 @@ def main() -> None:
 
     with unittest.mock.patch.dict("os.environ", {
         "CGI_TOKEN_PATH":       token_path,
-        "PHYSICAL_NITRO_ENCLAVE": "1",
     }):
         import cgi_runtime
         

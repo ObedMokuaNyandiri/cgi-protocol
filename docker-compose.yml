@@ -13,6 +13,8 @@ services:
       - ./data:/app/data
       # Mount the model (read-only)
       - ./models:/app/models:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - ENCLAVE_MODE=software
       - LOG_LEVEL=INFO

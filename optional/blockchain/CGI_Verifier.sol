@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 /**
  * @title CGIAttestationVerifier
  * @dev The core cryptographic verification layer for the CGI Protocol.
- * This contract verifies the AWS Nitro Enclave signatures securely,
+ * This contract verifies the Enclave signatures securely,
  * strictly enforcing EIP-2098 to prevent signature malleability.
  */
 contract CGIAttestationVerifier {

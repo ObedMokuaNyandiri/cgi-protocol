@@ -49,6 +49,10 @@ class OllamaLocalAdapter(BaseAdapter):
 
     def __init__(self) -> None:
         self._base_url = (settings.AI_ENDPOINT_URL or _DEFAULT_OLLAMA_URL).rstrip("/")
+        if settings.IS_DOCKER and ("localhost" in self._base_url or "127.0.0.1" in self._base_url):
+            logger.warning("OLLAMA | Docker detected. Rewriting localhost -> host.docker.internal")
+            self._base_url = self._base_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+
         self._model_id = settings.MODEL_ID or "llama3.2"
         self._system_prompt = getattr(settings, "AI_SYSTEM_PROMPT", "") or (
             "You are a controlled inference engine. Answer concisely and precisely."
@@ -67,6 +71,7 @@ class OllamaLocalAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
@@ -74,8 +79,9 @@ class OllamaLocalAdapter(BaseAdapter):
         """Call Ollama /api/generate (non-streaming)."""
         url = f"{self._base_url}/api/generate"
 
+        active_model = model_id if model_id else self._model_id
         body = {
-            "model": self._model_id,
+            "model": active_model,
             "prompt": prompt,
             "system": self._system_prompt,
             "stream": False,

@@ -24,14 +24,26 @@ def get_public_key() -> ec.EllipticCurvePublicKey:
     print("[SDK] Public Key fetched successfully.")
     return pub_key
 
-def request_inference(prompt: str) -> dict:
+def request_inference(prompt: str, api_key: str = None, intent_token: str = None) -> dict:
     """Send an inference request to the Verifiable API."""
     print(f"\n[SDK] Sending prompt to API: '{prompt}'")
-    resp = requests.post(f"{API_URL}/v1/infer", json={
+    
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    if intent_token:
+        headers["X-CGI-Intent"] = intent_token
+        
+    resp = requests.post(f"{API_URL}/v1/infer", headers=headers, json={
         "prompt": prompt,
-        "model_id": "qwen_0_5b",
-        "max_tokens": 200
+        "model_id": "gemini-2.5-flash",
+        "max_tokens": 200,
+        "purpose_of_use": "GENERAL",
+        "data_classification": "PUBLIC"
     })
+    
+    if resp.status_code != 200:
+        print(f"[!] API Error {resp.status_code}: {resp.text}")
     resp.raise_for_status()
     return resp.json()
 
@@ -83,8 +95,30 @@ def main():
         print(f"[!] Cannot connect to {API_URL}. Is api_gateway.py running?")
         sys.exit(1)
         
+    import os
+    import json
+    import base64
+    
+    api_key = os.environ.get("CGI_API_KEY")
+    intent_token = os.environ.get("CGI_INTENT_TOKEN")
+    
+    if not intent_token and os.path.exists("auth/epoch_token.json"):
+        try:
+            with open("auth/epoch_token.json", "r") as f:
+                token_data = json.load(f)
+            payload_b64 = base64.urlsafe_b64encode(json.dumps(token_data["token"]).encode("utf-8")).decode("utf-8")
+            intent_token = f"{payload_b64}.{token_data['signature']}"
+            print("[SDK] Loaded Intent Token from auth/epoch_token.json")
+        except Exception as e:
+            print(f"[!] Could not load fallback intent token: {e}")
+    
+    if not api_key:
+        print("\n[!] WARNING: CGI_API_KEY environment variable not set.")
+        print("    Production requests will be rejected by the gateway.")
+        print("    Generate one using: python auth/keygen.py --api-key \"My Org\"\n")
+        
     prompt = "Explain why zero-knowledge proofs are useful for privacy."
-    bundle = request_inference(prompt)
+    bundle = request_inference(prompt, api_key=api_key, intent_token=intent_token)
     
     print("\n[SDK] Inference completed. Received payload and attestation.")
     

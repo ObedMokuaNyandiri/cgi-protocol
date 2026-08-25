@@ -66,14 +66,17 @@ class GeminiNativeAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
     ) -> Tuple[str, str, int]:
         """Call Gemini generateContent and return (text, stop_reason, token_count)."""
-        url = f"{_GEMINI_API_BASE}/{self._model_id}:generateContent?key={self._api_key}"
+        # Fallback to configured default if client sends an empty string
+        active_model = model_id if model_id else self._model_id
+        url = f"{_GEMINI_API_BASE}/{active_model}:generateContent?key={self._api_key}"
 
-        body = self._build_request_body(prompt, max_tokens)
+        body = self._build_request_body(prompt, max_tokens, active_model)
         req_bytes = json.dumps(body).encode("utf-8")
 
         request = urllib.request.Request(
@@ -83,22 +86,32 @@ class GeminiNativeAdapter(BaseAdapter):
             method="POST",
         )
 
-        t0 = time.monotonic()
-        try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                raw = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="replace")
-            logger.error(
-                "GEMINI_HTTP_ERROR | exec_id=%s status=%d body=%s",
-                execution_id, exc.code, body_text[:500],
-            )
-            raise RuntimeError(
-                f"Gemini API error {exc.code}: {body_text[:200]}"
-            ) from exc
-        except Exception as exc:
-            logger.error("GEMINI_ERROR | exec_id=%s error=%s", execution_id, exc)
-            raise RuntimeError(f"Gemini request failed: {exc}") from exc
+        max_retries = 3
+        for attempt in range(max_retries):
+            t0 = time.monotonic()
+            try:
+                with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                    raw = json.loads(response.read().decode("utf-8"))
+                    break
+            except urllib.error.HTTPError as exc:
+                if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
+                    logger.warning(
+                        "GEMINI_RETRY | exec_id=%s status=%d attempt=%d",
+                        execution_id, exc.code, attempt + 1
+                    )
+                    time.sleep(2 ** attempt)
+                    continue
+                body_text = exc.read().decode("utf-8", errors="replace")
+                logger.error(
+                    "GEMINI_HTTP_ERROR | exec_id=%s status=%d body=%s",
+                    execution_id, exc.code, body_text[:500],
+                )
+                raise RuntimeError(
+                    f"Gemini API error {exc.code}: {body_text[:200]}"
+                ) from exc
+            except Exception as exc:
+                logger.error("GEMINI_ERROR | exec_id=%s error=%s", execution_id, exc)
+                raise RuntimeError(f"Gemini request failed: {exc}") from exc
 
         latency_ms = self._measure(t0)
         return self._parse_response(raw, execution_id, latency_ms)
@@ -118,8 +131,12 @@ class GeminiNativeAdapter(BaseAdapter):
     # Private helpers
     # ─────────────────────────────────────────────────────────
 
-    def _build_request_body(self, prompt: str, max_tokens: int) -> dict:
+    def _build_request_body(self, prompt: str, max_tokens: int, active_model: str) -> dict:
         """Build the Gemini generateContent request body."""
+        # gemini-3.5 models use thought tokens which eat into maxOutputTokens.
+        # We add a buffer to ensure the actual text output isn't prematurely truncated.
+        api_max_tokens = max_tokens + 500 if "gemini-3.5" in active_model else max_tokens
+        
         body: dict = {
             "contents": [
                 {
@@ -128,7 +145,7 @@ class GeminiNativeAdapter(BaseAdapter):
                 }
             ],
             "generationConfig": {
-                "maxOutputTokens": max_tokens,
+                "maxOutputTokens": api_max_tokens,
                 "temperature": self._temperature,
             },
         }
@@ -197,7 +214,14 @@ class GeminiNativeAdapter(BaseAdapter):
         stop_reason = reason_map.get(finish_reason, finish_reason)
 
         usage = raw.get("usageMetadata", {})
-        token_count = usage.get("candidatesTokenCount", len(text.split()))
+        token_count = usage.get("candidatesTokenCount")
+        if token_count is None:
+            total = usage.get("totalTokenCount")
+            prompt = usage.get("promptTokenCount")
+            if total is not None and prompt is not None:
+                token_count = total - prompt
+            else:
+                token_count = len(text.split())
 
         logger.info(
             "GEMINI_OK | exec_id=%s tokens=%d latency_ms=%.1f stop=%s",

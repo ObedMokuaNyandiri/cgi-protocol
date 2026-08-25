@@ -185,7 +185,7 @@ All settings via environment variables or `.env` file. See [`.env.example`](.env
 Key settings:
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENCLAVE_MODE` | `software` | `software` or `nitro` |
+| `ENCLAVE_MODE` | `software` | `software` |
 | `API_KEYS_FILE` | `auth/api_keys.json` | Path to API keys |
 | `RATE_LIMIT_RPM` | `30` | Requests per minute |
 | `WORKER_TIMEOUT_SECONDS` | `180` | Max inference time |

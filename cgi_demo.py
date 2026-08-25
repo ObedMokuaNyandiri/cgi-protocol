@@ -148,7 +148,7 @@ def demo_full_lifecycle():
     stop_lines  = [l for l in lines if "[WORKER_STOP]" in l]
     stop_reason = stop_lines[-1].split("reason=")[-1] if stop_lines else "unknown"
 
-    ok("Enclave Provider : aws-nitro (dev-mode)")
+    ok("Enclave Provider : software")
     ok("Constraints      : CUBLAS_WORKSPACE_CONFIG=:4096:8 | PYTHONHASHSEED=42")
     ok(f"Tokens Generated : {len(token_lines)}")
     ok(f"Stop Reason      : {stop_reason}")
@@ -159,7 +159,7 @@ def demo_full_lifecycle():
     info("Reading portable attestation bundle...")
     pause()
 
-    with open("outputs/portable_attestation.json", "r") as f:
+    with open("outputs/portable_attestation_latest.json", "r") as f:
         bundle = json.load(f)
 
     evidence = bundle["payload"].get("evidence", {})
@@ -181,7 +181,7 @@ def demo_full_lifecycle():
     pause()
 
     from cgi_sdk import CGIAuditor
-    auditor = CGIAuditor.from_file("outputs/portable_attestation.json")
+    auditor = CGIAuditor.from_file("outputs/portable_attestation_latest.json")
     result = auditor.verify()
 
     for check in result.checks:
@@ -203,7 +203,7 @@ def demo_full_lifecycle():
     info("Appending attestation to immutable chain registry...")
     from registry import AttestationRegistry
     reg = AttestationRegistry()
-    entry = reg.append("outputs/portable_attestation.json")
+    entry = reg.append("outputs/portable_attestation_latest.json")
     ok(f"Chain entry #{entry.sequence} registered | Entry hash: {entry.entry_hash[:32]}...")
     print()
 

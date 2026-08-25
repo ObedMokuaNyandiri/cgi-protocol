@@ -16,8 +16,6 @@ starlette>=0.37.0,<1.0.0
 # All cloud adapters work with stdlib urllib — no SDK needed.
 # These are for advanced features or if you prefer official clients.
 
-# AWS Bedrock (required for AI_BACKEND_TYPE=bedrock)
-# boto3>=1.35.0
 
 # Anthropic official SDK (optional — adapter works without it)
 # anthropic>=0.40.0
@@ -40,3 +38,7 @@ starlette>=0.37.0,<1.0.0
 
 # ── Optional: Hardware TEE attestation ────────────────────────
 # cbor2>=5.6.0
+
+# ── Anti-Tamper Compilation ───────────────────────────────────
+Cython>=3.0.0
+setuptools>=68.0.0

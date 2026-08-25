@@ -53,6 +53,10 @@ class OpenAICompatibleAdapter(BaseAdapter):
 
     def __init__(self) -> None:
         self._endpoint = (settings.AI_ENDPOINT_URL or "").rstrip("/")
+        if settings.IS_DOCKER and ("localhost" in self._endpoint or "127.0.0.1" in self._endpoint):
+            logger.warning("OPENAI | Docker detected. Rewriting localhost -> host.docker.internal")
+            self._endpoint = self._endpoint.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+
         self._api_key = settings.AI_API_KEY
         self._model_id = settings.MODEL_ID
         self._system_prompt = (
@@ -74,6 +78,7 @@ class OpenAICompatibleAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
@@ -85,8 +90,10 @@ class OpenAICompatibleAdapter(BaseAdapter):
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
+        active_model = model_id if model_id else self._model_id
+        
         payload = {
-            "model": self._model_id,
+            "model": active_model,
             "messages": [
                 {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": prompt},

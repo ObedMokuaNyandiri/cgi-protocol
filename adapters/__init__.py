@@ -15,7 +15,7 @@ Supported backends (set AI_BACKEND_TYPE to one of these):
     mistral              — Mistral AI (mistral-large-latest, mistral-small-latest, etc.)
     together_ai          — Together AI (Llama, Mixtral, Qwen, DeepSeek, etc.)
     huggingface_api      — HuggingFace Inference API (any HF Hub model)
-    bedrock              — AWS Bedrock (Claude, Titan, Llama via AWS) [requires boto3]
+
     cohere               — Cohere Command R / Command R+
 
   LOCAL / SELF-HOSTED (no API key):
@@ -64,7 +64,7 @@ _ADAPTER_REGISTRY: dict[str, tuple[str, str]] = {
     "mistral":               ("adapters.mistral_api",                "MistralAdapter"),
     "together_ai":           ("adapters.together_ai",                "TogetherAIAdapter"),
     "huggingface_api":       ("adapters.huggingface_inference_api",  "HuggingFaceInferenceAPIAdapter"),
-    "bedrock":               ("adapters.bedrock",                    "BedrockAdapter"),
+
     "cohere":                ("adapters.cohere_command",             "CohereCommandAdapter"),
 
     # Local / self-hosted
@@ -88,8 +88,7 @@ _ALIASES: dict[str, str] = {
     "vllm":              "vllm_local",
     "llamacpp":          "llamacpp_server",
     "llama_cpp":         "llamacpp_server",
-    "aws":               "bedrock",
-    "aws_bedrock":       "bedrock",
+
     "together":          "together_ai",
 }
 

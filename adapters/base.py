@@ -73,6 +73,7 @@ class BaseAdapter:
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,

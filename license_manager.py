@@ -76,10 +76,10 @@ _TIER_LIMITS: dict[str, dict] = {
     LicenseTier.PROFESSIONAL: {
         "max_requests_per_day":    20_000,
         "max_requests_per_minute": 200,
-        "allowed_models_prefix":   ["flash", "lite", "pro"],
+        "allowed_models_prefix":   ["flash", "lite", "pro", "claude", "opus", "sonnet", "haiku", "gpt-4"],
         "blockchain_anchor":       True,
         "audit_export":            True,
-        "max_prompt_length":       8192,
+        "max_prompt_length":       200000,
         "data_classifications":    ["PUBLIC", "CONFIDENTIAL", "PII"],
     },
     LicenseTier.ENTERPRISE: {
@@ -88,7 +88,7 @@ _TIER_LIMITS: dict[str, dict] = {
         "allowed_models_prefix":   [],  # empty = all models allowed
         "blockchain_anchor":       True,
         "audit_export":            True,
-        "max_prompt_length":       32768,
+        "max_prompt_length":       1000000,
         "data_classifications":    ["PUBLIC", "CONFIDENTIAL", "PII", "PRIVILEGED", "CLASSIFIED"],
     },
 }
@@ -118,6 +118,7 @@ class LicenseStatus:
     audit_export:             bool          = False
     max_prompt_length:        int           = 1024
     data_classifications:     list[str]     = field(default_factory=lambda: ["PUBLIC"])
+    signature:                str           = ""
     error:                    str           = ""
 
     @property
@@ -319,6 +320,7 @@ class LicenseManager:
             licensee_domain=licensee.get("domain", "GENERAL"),
             tier=tier,
             expires_at=expires_at,
+            signature=data.get("signature", ""),
             **self._limits_to_status_fields(base_limits),
         )
 

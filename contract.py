@@ -12,12 +12,12 @@ class ContractVersion:
 
 @dataclass
 class ExecutionClaims:
-    model_identity: str = "sha256:qwen_0_5b"
+    model_identity: str = "unverified_implicit_identity"
     execution_mode: str = "deterministic"
-    network_policy: str = "deny-all"
+    network_policy: str = "unverified"
     tool_policy: str = "no-external-tools"
     provenance: str = "complete"
-    policy_hash: str = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    policy_hash: str = "unverified"
 
 @dataclass
 class ValidityRules:
@@ -26,7 +26,7 @@ class ValidityRules:
 
 @dataclass
 class TrustAssumptions:
-    requires_secure_tee: bool = True
+    requires_secure_tee: bool = False
     requires_hash_collision_resistance: str = "SHA-256"
     requires_audit_trail: bool = True
     # Legacy blockchain fields (kept for backward compat, default False)
@@ -52,8 +52,8 @@ class ContractParameters:
             raise TypeError(f"temperature must be float, got {type(self.temperature)}")
         if not isinstance(self.seed, int):
             raise TypeError(f"seed must be int, got {type(self.seed)}")
-        if self.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC"):
-            raise ValueError(f"data_classification must be CONFIDENTIAL, PII, or PUBLIC, got {self.data_classification}")
+        if self.data_classification not in ("CONFIDENTIAL", "PII", "PUBLIC", "PRIVILEGED", "CLASSIFIED"):
+            raise ValueError(f"data_classification must be one of CONFIDENTIAL, PII, PUBLIC, PRIVILEGED, CLASSIFIED; got {self.data_classification}")
 
 @dataclass
 class RequiredObligations:
@@ -101,18 +101,22 @@ class InferenceContract:
             raise ValueError("prompt_hash cannot be empty")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        def clean_dict_factory(data):
+            return {k: v for k, v in data if v not in (None, "", [], {})}
+            
+        raw = {
             "execution_id": self.execution_id,
             "prompt_hash": self.prompt_hash,
-            "version": asdict(self.version),
-            "parameters": asdict(self.parameters),
-            "claims": asdict(self.claims),
-            "validity": asdict(self.validity),
-            "trust_assumptions": asdict(self.trust_assumptions),
-            "semantic_bounds": asdict(self.semantic_bounds),
-            "obligations": asdict(self.obligations),
+            "version": asdict(self.version, dict_factory=clean_dict_factory),
+            "parameters": asdict(self.parameters, dict_factory=clean_dict_factory),
+            "claims": asdict(self.claims, dict_factory=clean_dict_factory),
+            "validity": asdict(self.validity, dict_factory=clean_dict_factory),
+            "trust_assumptions": asdict(self.trust_assumptions, dict_factory=clean_dict_factory),
+            "semantic_bounds": asdict(self.semantic_bounds, dict_factory=clean_dict_factory),
+            "obligations": asdict(self.obligations, dict_factory=clean_dict_factory),
             "extensions": self.extensions
         }
+        return {k: v for k, v in raw.items() if v not in (None, "", [], {})}
 
     def serialize(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))

@@ -67,7 +67,7 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
         sys.exit(1)
 
     print("[2/3] VALIDATING TEE HARDWARE SIGNATURE...")
-    # In a real environment, this would call AWS NSM or Intel SGX Quote verification.
+    # In a real environment, this would call Intel SGX Quote verification.
     # We verify the local governance key signature to prove the TEE signed the final bundle.
     evidence = payload.get("evidence", {})
     # FIX FLAW-010: runtime writes "hardware_attestations" (plural); support both.
@@ -77,9 +77,7 @@ def run_cli(token_path: str, bundle_path: str, output_path: str, sidechannel_pat
     fmt = hardware_attestation.get("format", "unknown")
     # quote_b64 is not currently used by this snippet directly
     
-    if fmt == "aws-nitro-cose":
-        print("  -> Detected AWS Nitro Enclave Quote")
-    elif fmt == "intel-sgx-dcap":
+    if fmt == "intel-sgx-dcap":
         print("  -> Detected Intel SGX DCAP Quote")
     elif fmt == "amd-sev-snp":
         print("  -> Detected AMD SEV-SNP Quote")

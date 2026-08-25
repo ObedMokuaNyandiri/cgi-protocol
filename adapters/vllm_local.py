@@ -32,9 +32,36 @@ class VLLMLocalAdapter(OpenAICompatibleAdapter):
     def __init__(self) -> None:
         from config import settings
         import logging
+        # We don't mutate settings, we just use a fallback endpoint if it's missing
         if not settings.AI_ENDPOINT_URL:
-            settings.__dict__["AI_ENDPOINT_URL"] = _DEFAULT_VLLM_URL
+            self._endpoint = _DEFAULT_VLLM_URL
+        else:
+            self._endpoint = settings.AI_ENDPOINT_URL.rstrip("/")
+            
+        # Initialize OpenAI compatible adapter with current settings
+        # We need to temporarily set the endpoint for the superclass to see it
+        # However, OpenAICompatibleAdapter checks settings.AI_ENDPOINT_URL directly,
+        # so we will let super().__init__() fail if not set and catch it, or just 
+        # override the values post-init.
+        
+        # Best approach: mock it before super call
+        original_endpoint = settings.AI_ENDPOINT_URL
+        try:
+            # Bypass frozen checks for initialization purposes only if needed,
+            # or just override the property after super()
+            pass
+        except Exception:
+            pass
+            
         super().__init__()
+        
+        # Override the endpoint that the superclass grabbed
+        if not original_endpoint:
+            self._endpoint = _DEFAULT_VLLM_URL
+            if settings.IS_DOCKER and ("localhost" in self._endpoint or "127.0.0.1" in self._endpoint):
+                logging.getLogger("cgi.adapters.vllm").warning("VLLM | Docker detected. Rewriting localhost -> host.docker.internal")
+                self._endpoint = self._endpoint.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+            
         # vLLM doesn't need an API key for local use
         if not self._api_key:
             self._api_key = "no-key-needed"

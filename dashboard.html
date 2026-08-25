@@ -148,6 +148,45 @@
     button:hover { background: var(--primary-hover); }
     button:disabled { background: #555; cursor: not-allowed; }
 
+    /* Status Banner */
+    #statusBanner { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 5px var(--success); }
+    .status-dot.offline { background: var(--error); }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed; top: 40px; right: 20px; z-index: 2000;
+      display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    }
+    .toast {
+      background: #252526; color: #fff; border-left: 4px solid var(--primary);
+      padding: 12px 16px; border-radius: 2px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      min-width: 250px; pointer-events: auto; animation: slideIn 0.3s ease-out;
+    }
+    .toast.error { border-left-color: var(--error); }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-content {
+      background: #252526; padding: 24px; border-radius: 4px; width: 400px; border: 1px solid #3c3c3c; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .modal-content h3 { margin-top: 0; color: #fff; font-size: 16px; font-weight: 500; margin-bottom: 8px; }
+    .modal-content p { color: #aaa; font-size: 13px; margin-bottom: 16px; line-height: 1.4; }
+    .modal-content input {
+      width: 100%; box-sizing: border-box; padding: 8px 12px; background: #1e1e1e; border: 1px solid #3c3c3c; color: #fff; border-radius: 2px; margin-bottom: 16px; font-family: var(--font-mono); font-size: 13px; outline: none;
+    }
+    .modal-content input:focus { border-color: var(--primary); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn-cancel { background: transparent; border: 1px solid #3c3c3c; color: #ccc; padding: 6px 16px; border-radius: 2px; cursor: pointer; }
+    .btn-cancel:hover { background: #2a2d2e; }
+    .btn-primary { background: var(--primary); color: #fff; border: none; padding: 6px 16px; border-radius: 2px; cursor: pointer; font-weight: 500; }
+    .btn-primary:hover { background: var(--primary-hover); }
+
     .field {
       margin-bottom: 20px;
     }
@@ -229,9 +268,10 @@
 </head>
 <body>
 
+<div id="toastContainer" class="toast-container"></div>
+
 <div class="titlebar">
-  <span>CGI Protocol - Workspace</span>
-  <span>Local Environment</span>
+  <div style="font-weight: 600; letter-spacing: 0.5px;">CGI PROTOCOL EXPLORER</div>Local Environment</span>
 </div>
 
 <div class="workspace">
@@ -240,7 +280,7 @@
     <div class="sidebar-header">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <span>Explorer: Live & Historical Events</span>
-        <a href="/dashboard/export/csv" style="background: #333; color: #fff; padding: 2px 6px; font-size: 10px; text-decoration: none; border-radius: 2px; border: 1px solid #555;" download>Export CSV</a>
+        <button onclick="exportCsv()" style="background: #333; color: #fff; padding: 2px 6px; font-size: 10px; border-radius: 2px; border: 1px solid #555; cursor: pointer;">Export CSV</button>
       </div>
       <div style="display: flex; gap: 4px;">
         <input type="text" id="searchInput" placeholder="Enter Execution ID..." style="flex: 1; background: #1e1e1e; border: 1px solid #444; color: #ccc; padding: 4px; font-size: 11px; border-radius: 2px;">
@@ -255,19 +295,100 @@
   <!-- Editor -->
   <div class="editor">
     <div class="tabs">
-      <div class="tab">attestation.json</div>
+      <div class="tab active" id="tab-attestation" onclick="showTab('attestation')">attestation.json</div>
+      <div class="tab" id="tab-license" onclick="showTab('license')" style="display:flex;align-items:center;gap:6px;">&#x1F511; License</div>
     </div>
     <div class="editor-content" id="editorContent">
       <div style="color: var(--text-dim); text-align: center; margin-top: 100px;">
         Select an event from the Explorer to view its cryptographic attestation.
       </div>
     </div>
+    <!-- License Panel -->
+    <div id="licensePanel" style="display:none; padding: 32px 40px; height: 100%; overflow-y: auto; box-sizing: border-box;">
+      <div style="max-width: 680px; margin: 0 auto;">
+
+        <!-- Header -->
+        <div style="margin-bottom: 28px;">
+          <div style="font-size: 18px; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">CGI Protocol License</div>
+          <div style="color: var(--text-dim); font-size: 12px;">Paste your license key to activate this server instance. The key is verified cryptographically — no internet required.</div>
+        </div>
+
+        <!-- Current Status Card -->
+        <div id="licenseStatusCard" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px; margin-bottom: 24px;">
+          <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Current License Status</div>
+          <div id="licenseStatusBody" style="color: var(--text-dim); font-style: italic;">Loading...</div>
+        </div>
+
+        <!-- Activate Form -->
+        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px; margin-bottom: 24px;">
+          <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Activate License Key</div>
+          <div style="color: var(--text-dim); font-size: 11px; margin-bottom: 12px;">Paste the CGI-* key string you received after purchasing your license.</div>
+          <textarea id="licenseKeyInput" placeholder="CGI-eyJsaWNlbnNlX2lkIjoibGljLW..." style="width: 100%; height: 110px; background: #0d1117; border: 1px solid #444; color: #d2a679; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 4px; resize: none; box-sizing: border-box; word-break: break-all;"></textarea>
+          <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+            <button id="activateBtn" onclick="activateLicense()" style="background: #238636; color: #fff; border: none; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">Activate License</button>
+            <button onclick="checkLicenseStatus()" style="background: #21262d; color: #ccc; border: 1px solid #444; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 12px;">Refresh Status</button>
+            <span id="activateSpinner" style="display:none; color: var(--text-dim); font-size: 11px;">Verifying...</span>
+          </div>
+        </div>
+
+        <!-- Tier Reference -->
+        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px;">
+          <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px;">License Tiers</div>
+          <table style="width: 100%; font-size: 11px; border-collapse: collapse; color: #ccc;">
+            <thead>
+              <tr style="color: var(--text-dim); border-bottom: 1px solid #30363d;">
+                <th style="text-align:left; padding: 6px 8px;">Tier</th>
+                <th style="text-align:right; padding: 6px 8px;">Req/Day</th>
+                <th style="text-align:right; padding: 6px 8px;">Req/Min</th>
+                <th style="text-align:left; padding: 6px 8px;">Data Access</th>
+                <th style="text-align:center; padding: 6px 8px;">Validity</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #21262d;">
+                <td style="padding: 7px 8px;"><span style="color:#58a6ff;">TRIAL</span></td>
+                <td style="text-align:right; padding: 7px 8px;">100</td>
+                <td style="text-align:right; padding: 7px 8px;">5</td>
+                <td style="padding: 7px 8px;">PUBLIC</td>
+                <td style="text-align:center; padding: 7px 8px;">14 days</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #21262d;">
+                <td style="padding: 7px 8px;"><span style="color:#3fb950;">STARTER</span></td>
+                <td style="text-align:right; padding: 7px 8px;">2,000</td>
+                <td style="text-align:right; padding: 7px 8px;">30</td>
+                <td style="padding: 7px 8px;">+ CONFIDENTIAL</td>
+                <td style="text-align:center; padding: 7px 8px;">12 months</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #21262d;">
+                <td style="padding: 7px 8px;"><span style="color:#d29922;">PROFESSIONAL</span></td>
+                <td style="text-align:right; padding: 7px 8px;">20,000</td>
+                <td style="text-align:right; padding: 7px 8px;">200</td>
+                <td style="padding: 7px 8px;">+ PII</td>
+                <td style="text-align:center; padding: 7px 8px;">12 months</td>
+              </tr>
+              <tr>
+                <td style="padding: 7px 8px;"><span style="color:#a371f7;">ENTERPRISE</span></td>
+                <td style="text-align:right; padding: 7px 8px;">500,000</td>
+                <td style="text-align:right; padding: 7px 8px;">1,000</td>
+                <td style="padding: 7px 8px;">ALL incl. CLASSIFIED</td>
+                <td style="text-align:center; padding: 7px 8px;">12 / 24 months</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top: 14px; color: var(--text-dim); font-size: 11px;">
+            To purchase a license or upgrade your tier, contact <span style="color: #58a6ff;">licensing@cgi-protocol.io</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="statusbar">
-  <div class="status-item" id="connectionStatus">○ Connecting to Server-Sent Events...</div>
+  <div class="status-item" id="connectionStatus">&#9675; Connecting to Server-Sent Events...</div>
   <div class="status-item">
+    <span id="licenseStatusBar" style="margin-right: 16px; font-size: 10px;"></span>
     <span id="anchorStatus">Bitcoin Anchor: Pending</span>
     <button id="globalTriggerBtn" onclick="triggerAnchor()" style="margin-left: 12px; padding: 2px 8px; font-size: 10px; background: #333; border: 1px solid #555; height: 18px; line-height: 12px;">Trigger Anchor Now</button>
   </div>
@@ -275,6 +396,10 @@
 
 <script>
 const API_BASE = window.location.origin;
+const urlParams = new URLSearchParams(window.location.search);
+const globalApiKey = urlParams.get('api_key') || '';
+const authQ = globalApiKey ? `?api_key=${encodeURIComponent(globalApiKey)}` : '';
+const authQAmp = globalApiKey ? `&api_key=${encodeURIComponent(globalApiKey)}` : '';
 let attestations = [];
 let selectedIdx = -1;
 let evtSource = null;
@@ -283,47 +408,246 @@ let evtSource = null;
 window.addEventListener('DOMContentLoaded', () => {
   fetchAnchorStatus();
   setInterval(fetchAnchorStatus, 30_000);
+  fetchInitialAttestations();
   connectSSE();
+  checkLicenseStatus();
+  setInterval(checkLicenseStatus, 60_000);
 });
 
-async function searchAttestation() {
-  const query = document.getElementById('searchInput').value.trim();
-  if (!query) return;
-  
-  let idx = attestations.findIndex(a => a.execution_id === query);
-  
-  if (idx === -1) {
-    try {
-      const res = await fetch(`${API_BASE}/v1/attestation/${query}`);
-      if (res.ok) {
-        const bundle = await res.json();
-        let ts = bundle.attestation?.timestamp || bundle.attestation?.attested_at || Math.floor(Date.now() / 1000);
-        let model = bundle.inference?.model_id || bundle.payload?.contract?.parameters?.model_id || "UNKNOWN";
-        let classification = bundle.inference?.data_classification || "CONFIDENTIAL";
+// ── Tab Switching ─────────────────────────────────────────────
+function showTab(tab) {
+  const editor = document.getElementById('editorContent');
+  const licPanel = document.getElementById('licensePanel');
+  const tabAtt = document.getElementById('tab-attestation');
+  const tabLic = document.getElementById('tab-license');
+  if (tab === 'license') {
+    editor.style.display = 'none';
+    licPanel.style.display = 'block';
+    tabAtt.classList.remove('active');
+    tabLic.classList.add('active');
+    checkLicenseStatus();
+  } else {
+    editor.style.display = 'block';
+    licPanel.style.display = 'none';
+    tabAtt.classList.add('active');
+    tabLic.classList.remove('active');
+  }
+}
 
-        const dummyEvent = {
-          execution_id: query,
-          root_hash: bundle.attestation?.root_hash || "Historical Event",
-          signature: bundle.attestation?.signature || "Historical Signature",
-          data_classification: classification,
-          timestamp: ts,
-          model_id: model,
-          full_bundle: bundle
-        };
-        attestations.unshift(dummyEvent);
-        idx = 0;
-        renderFeed();
-      } else {
-        alert("Execution ID not found in historical ledger.");
-        return;
-      }
-    } catch (e) {
-      alert("Network error while searching ledger.");
+// ── License Activation ────────────────────────────────────────
+async function activateLicense() {
+  const key = document.getElementById('licenseKeyInput').value.trim();
+  if (!key) { showToast('Paste your CGI-* license key first.', 'warning'); return; }
+  if (!key.startsWith('CGI-')) { showToast('Invalid format. License keys start with CGI-', 'error'); return; }
+
+  document.getElementById('activateBtn').disabled = true;
+  document.getElementById('activateSpinner').style.display = 'inline';
+
+  try {
+    const res = await fetch(`${API_BASE}/v1/license/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license_key: key })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`License activated: ${data.tier} tier for ${data.licensee} — ${data.days_remaining} days remaining.`, 'success');
+      document.getElementById('licenseKeyInput').value = '';
+      renderLicenseStatus(data, true);
+    } else {
+      showToast(data.detail || 'Activation failed.', 'error');
+    }
+  } catch (e) {
+    showToast('Could not reach server. Is it running?', 'error');
+  } finally {
+    document.getElementById('activateBtn').disabled = false;
+    document.getElementById('activateSpinner').style.display = 'none';
+  }
+}
+
+async function checkLicenseStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/v1/license/status`);
+    const data = await res.json();
+    renderLicenseStatus(data, false);
+  } catch (e) {
+    document.getElementById('licenseStatusBody').innerHTML = '<span style="color:#f85149;">Cannot reach server.</span>';
+  }
+}
+
+let licenseCountdownInterval = null;
+
+function renderLicenseStatus(data, justActivated) {
+  const body = document.getElementById('licenseStatusBody');
+  const bar = document.getElementById('licenseStatusBar');
+  const card = document.getElementById('licenseStatusCard');
+
+  if (licenseCountdownInterval) {
+    clearInterval(licenseCountdownInterval);
+    licenseCountdownInterval = null;
+  }
+
+  if (!data || data.status === 'UNLICENSED') {
+    body.innerHTML = '<span style="color:#f85149;">&#x26A0; UNLICENSED</span> — No valid license is active. Activate one using the form below.';
+    card.style.borderColor = '#f85149';
+    if (bar) bar.innerHTML = '<span style="color:#f85149;">&#x26A0; UNLICENSED</span>';
+    return;
+  }
+
+  const tierColors = { TRIAL: '#58a6ff', STARTER: '#3fb950', PROFESSIONAL: '#d29922', ENTERPRISE: '#a371f7' };
+  const tier = data.tier ? data.tier.replace('LicenseTier.', '') : 'UNKNOWN';
+  const color = tierColors[tier] || '#ccc';
+  const expiring = data.days_remaining < 30;
+
+  card.style.borderColor = expiring ? '#d29922' : '#238636';
+
+  body.innerHTML = `
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 12px;">
+      <div><span style="color:var(--text-dim);">Status</span><br><span id="licStatusText" style="color:#3fb950; font-weight:600;">&#x2714; ACTIVE</span></div>
+      <div><span style="color:var(--text-dim);">Tier</span><br><span style="color:${color}; font-weight:700;">${tier}</span></div>
+      <div><span style="color:var(--text-dim);">Licensee</span><br><span style="color:#e6edf3;">${data.licensee || 'N/A'}</span></div>
+      <div><span style="color:var(--text-dim);">Domain</span><br><span style="color:#e6edf3;">${data.domain || 'GENERAL'}</span></div>
+      <div style="grid-column: 1 / -1;"><span style="color:var(--text-dim);">Time Remaining</span><br><span id="licCountdownText" style="color:${expiring ? '#d29922' : '#e6edf3'}; font-weight: ${expiring ? '600' : '400'}; font-family: monospace; font-size: 13px;">Calculating...</span></div>
+      <div><span style="color:var(--text-dim);">Expires At</span><br><span style="color:#8b949e;">${data.expires}</span></div>
+      <div><span style="color:var(--text-dim);">License ID</span><br><span style="color:#666; font-family:monospace; font-size:10px;">${data.license_id}</span></div>
+      <div><span style="color:var(--text-dim);">Req / Day</span><br><span style="color:#e6edf3;">${(data.max_requests_per_day||0).toLocaleString()}</span></div>
+      <div><span style="color:var(--text-dim);">Req / Min</span><br><span style="color:#e6edf3;">${data.max_requests_per_minute || 0}</span></div>
+    </div>
+    <div style="margin-top:12px; padding-top:12px; border-top:1px solid #21262d; font-size:11px; color:var(--text-dim);">
+      Data classifications: <span style="color:#e6edf3;">${(data.data_classifications||[]).join(', ')}</span>
+      &nbsp;&nbsp;|&nbsp;&nbsp; Blockchain anchor: <span style="color:#e6edf3;">${data.blockchain_anchor ? 'Enabled' : 'Disabled'}</span>
+      &nbsp;&nbsp;|&nbsp;&nbsp; Audit export: <span style="color:#e6edf3;">${data.audit_export ? 'Enabled' : 'Disabled'}</span>
+    </div>`;
+
+  if (bar) bar.innerHTML = `<span style="color:${color};">&#x1F511; ${tier}</span> &bull; <span id="licStatusBarTime" style="color:${expiring ? '#d29922' : '#666'}">${data.days_remaining}d</span>`;
+
+  // Start the live countdown
+  const expiresMs = data.expires_timestamp * 1000;
+  
+  function updateCountdown() {
+    const now = Date.now();
+    const diff = expiresMs - now;
+    
+    if (diff <= 0) {
+      document.getElementById('licCountdownText').innerHTML = '<span style="color:#f85149; font-weight:bold;">EXPIRED</span>';
+      document.getElementById('licStatusText').innerHTML = '<span style="color:#f85149; font-weight:600;">&#x2716; EXPIRED</span>';
+      if (bar) document.getElementById('licStatusBarTime').innerHTML = '<span style="color:#f85149;">EXPIRED</span>';
+      clearInterval(licenseCountdownInterval);
       return;
     }
+
+    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const m = Math.floor((diff / 1000 / 60) % 60);
+    const s = Math.floor((diff / 1000) % 60);
+    
+    let timeStr = "";
+    if (d >= 365) {
+      const y = Math.floor(d / 365);
+      const remain_d = d % 365;
+      timeStr = `${y} yrs, ${remain_d} days, ${h} hrs, ${m} mins, ${s} secs`;
+    } else if (d > 0) {
+      timeStr = `${d} days, ${h} hrs, ${m} mins, ${s} secs`;
+    } else {
+      timeStr = `${h} hrs, ${m} mins, ${s} secs`;
+    }
+
+    document.getElementById('licCountdownText').innerText = timeStr;
+    if (bar) document.getElementById('licStatusBarTime').innerText = (d > 0) ? `${d}d ${h}h` : `${h}h ${m}m`;
+  }
+
+  updateCountdown();
+  licenseCountdownInterval = setInterval(updateCountdown, 1000);
+}
+
+async function fetchInitialAttestations() {
+  try {
+    const res = await fetch(`${API_BASE}/v1/attestations${authQ ? authQ + '&' : '?'}limit=20`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        attestations = data;
+        renderFeed();
+        selectAttestation(0);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load initial history:", e);
+  }
+}
+
+async function searchAttestation() {
+  let query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  
+  // Auto-prepend exec- if missing but looks like a UUID
+  if (!query.startsWith('exec-') && /^[0-9a-fA-F-]+$/.test(query)) {
+    query = 'exec-' + query;
   }
   
-  selectAttestation(idx);
+  const idx = attestations.findIndex(a => a.execution_id === query || a.root_hash === query);
+  if (idx !== -1) {
+    selectAttestation(idx);
+    document.querySelector('.feed-list').children[idx].scrollIntoView({ behavior: 'smooth' });
+  } else {
+    // Attempt remote fetch
+    try {
+      const res = await fetch(`${API_BASE}/v1/attestation/${query}${authQ}`);
+      if (res.ok) {
+        const bundle = await res.json();
+        try {
+          const ev = {
+            execution_id: bundle?.payload?.contract?.execution_id || query,
+            root_hash: bundle?.attestation?.root_hash || 'Pending',
+            signature: bundle?.attestation?.signature || bundle?.attestation?.attestation_signature || 'N/A',
+            model_id: bundle?.payload?.contract?.model_id || 'Unknown',
+            data_classification: bundle?.payload?.contract?.obligations?.data_classification || 'Standard',
+            tokens_generated: bundle?.payload?.execution_metrics?.tokens_generated || 0,
+            wall_duration_ms: bundle?.payload?.execution_metrics?.wall_duration_ms || 0
+          };
+          attestations.unshift(ev);
+          renderFeed();
+          selectAttestation(0);
+        } catch (parseErr) {
+          console.error("Data parse error:", parseErr);
+          showToast("Loaded attestation but failed to parse UI fields.", true);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || "Execution ID not found in historical ledger.", true);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Network error while searching ledger.", true);
+    }
+  }
+}
+
+function showToast(message, isError = false) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${isError ? 'error' : ''}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+function copyToClipboard(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    const originalHTML = el.innerHTML;
+    el.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; color: #3fb950;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    showToast("Copied to clipboard!");
+    setTimeout(() => {
+      el.innerHTML = originalHTML;
+    }, 2000);
+  }).catch(err => {
+    console.error('Could not copy text: ', err);
+    showToast("Failed to copy text", true);
+  });
 }
 
 function removeAttestation(event, idx) {
@@ -349,7 +673,7 @@ function connectSSE() {
   if (evtSource) { evtSource.close(); }
   document.getElementById('connectionStatus').textContent = '○ Reconnecting to Event Stream...';
   
-  evtSource = new EventSource(`${API_BASE}/v1/stream/attestations`);
+  evtSource = new EventSource(`${API_BASE}/v1/stream/attestations${authQ}`);
   
   evtSource.onopen = () => {
     document.getElementById('connectionStatus').textContent = '● Connected (Live)';
@@ -361,6 +685,8 @@ function connectSSE() {
       if (event.type === 'ATTESTATION') {
         attestations.unshift(event);
         renderFeed();
+        // Automatically select the newly received event
+        selectAttestation(0);
       }
     } catch (_) {}
   };
@@ -405,7 +731,9 @@ function renderFeed() {
     const cls = a.data_classification || 'UNKNOWN';
     
     el.innerHTML = `
-      <span class="delete-icon" onclick="removeAttestation(event, ${i})" title="Remove from view">🗑️</span>
+      <span class="delete-icon" onclick="removeAttestation(event, ${i})" title="Remove from view">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      </span>
       <div class="feed-id">${a.execution_id.substring(0, 20)}...</div>
       <div class="feed-time">${dateStr}</div>
       <div class="badge-container">
@@ -425,7 +753,7 @@ function toHexDump(buffer) {
     const hex = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join(' ');
     const ascii = Array.from(chunk).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
     const offset = i.toString(16).padStart(8, '0');
-    hexDump += `${offset}  ${hex.padEnd(47, ' ')}  |${ascii}|\\n`;
+    hexDump += `${offset}  ${hex.padEnd(47, ' ')}  |${ascii}|\n`;
   }
   return hexDump;
 }
@@ -445,17 +773,17 @@ async function selectAttestation(idx) {
     </div>
     
     <div class="field">
-      <div class="field-label">Execution ID</div>
+      <div class="field-label">Execution ID <span style="cursor:pointer; color:var(--text-dim); margin-left: 8px;" onclick="copyToClipboard('${a.execution_id}', this)" title="Copy"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span></div>
       <div class="field-value">${a.execution_id}</div>
     </div>
     
     <div class="field">
-      <div class="field-label">Canonical Root Hash (SHA-256)</div>
+      <div class="field-label">Canonical Root Hash (SHA-256) <span style="cursor:pointer; color:var(--text-dim); margin-left: 8px;" onclick="copyToClipboard('${a.root_hash}', this)" title="Copy"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span></div>
       <div class="field-value hash">${a.root_hash}</div>
     </div>
     
     <div class="field">
-      <div class="field-label">ECDSA Signature (secp256k1)</div>
+      <div class="field-label">Governance Signature <span style="cursor:pointer; color:var(--text-dim); margin-left: 8px;" onclick="copyToClipboard('${a.signature}', this)" title="Copy"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></span></div>
       <div class="field-value hash">${a.signature}</div>
     </div>
     
@@ -463,11 +791,17 @@ async function selectAttestation(idx) {
 
     <div style="display: flex; gap: 16px; margin-top: 32px; width: 100%;">
       <div style="flex: 1; min-width: 0;">
-        <div class="field-label">Raw Attestation Payload (JSON)</div>
+        <div class="field-label" style="display: flex; justify-content: space-between;">
+          <span>Raw Attestation Payload (JSON)</span>
+          <span style="cursor:pointer; color:var(--text-dim);" onclick="copyToClipboard(document.getElementById('jsonPreview').textContent, this)" title="Copy JSON"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</span>
+        </div>
         <div class="json-preview" id="jsonPreview">Fetching full bundle...</div>
       </div>
       <div style="flex: 1; min-width: 0;">
-        <div class="field-label">Bitcoin OpenTimestamps Proof (.ots Hex Dump)</div>
+        <div class="field-label" style="display: flex; justify-content: space-between;">
+          <span>Bitcoin OpenTimestamps Proof (.ots Hex Dump)</span>
+          <span style="cursor:pointer; color:var(--text-dim);" onclick="copyToClipboard(document.getElementById('otsPreview').textContent, this)" title="Copy Hex"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</span>
+        </div>
         <div class="json-preview" id="otsPreview" style="color: #7ee787;">Checking anchor status...</div>
       </div>
     </div>
@@ -475,7 +809,7 @@ async function selectAttestation(idx) {
   
   // Fetch full bundle via the new backend endpoint
   try {
-    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}`);
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}${authQ}`);
     if (res.ok) {
       const bundle = await res.json();
       a.full_bundle = bundle;
@@ -489,7 +823,7 @@ async function selectAttestation(idx) {
 
   // Fetch OTS proof for hex dump
   try {
-    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/proof`);
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/proof${authQ}`);
     if (res.ok) {
       const buffer = await res.arrayBuffer();
       document.getElementById('otsPreview').textContent = toHexDump(buffer);
@@ -497,7 +831,7 @@ async function selectAttestation(idx) {
       document.getElementById('btnDownloadProof').style.display = "inline-block";
     } else {
       const err = await res.json();
-      document.getElementById('otsPreview').textContent = "Not anchored to Bitcoin yet.\\n\\n" + (err.detail || "");
+      document.getElementById('otsPreview').textContent = "Not anchored to Bitcoin yet.\n\n" + (err.detail || "");
       document.getElementById('otsPreview').style.color = "#8b949e";
       document.getElementById('btnDownloadProof').style.display = "none";
     }
@@ -509,46 +843,130 @@ async function selectAttestation(idx) {
 }
 
 // Download logic
+function exportCsv() {
+  document.getElementById('apiKeyModal').style.display = 'flex';
+  document.getElementById('csvApiKeyInput').focus();
+}
+
+function closeApiKeyModal() {
+  document.getElementById('apiKeyModal').style.display = 'none';
+  document.getElementById('csvApiKeyInput').value = '';
+  document.getElementById('csvModalError').style.display = 'none';
+}
+
+async function submitExportCsv() {
+  const apiKey = document.getElementById('csvApiKeyInput').value.trim();
+  const days = document.getElementById('csvDaysInput').value || 30;
+  const errorDiv = document.getElementById('csvModalError');
+  
+  if (!apiKey) {
+    errorDiv.textContent = "API Key is required.";
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  errorDiv.style.display = 'none';
+  const btn = event.target || document.querySelector('.btn-primary');
+  const oldText = btn.textContent;
+  btn.textContent = 'Verifying & Exporting...';
+  btn.disabled = true;
+
+  try {
+    const downloadUrl = `${API_BASE}/dashboard/export/csv?api_key=${encodeURIComponent(apiKey)}&days=${encodeURIComponent(days)}`;
+    
+    // 1. Verify authentication by inspecting the first headers of a GET request
+    const controller = new AbortController();
+    const res = await fetch(downloadUrl, { signal: controller.signal });
+    const contentType = res.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      const err = await res.json();
+      errorDiv.textContent = `Export Failed: ${err.detail || 'Invalid API Key or unauthorized'}`;
+      errorDiv.style.display = 'block';
+      btn.textContent = oldText;
+      btn.disabled = false;
+      return;
+    }
+    
+    // 2. Authentication passed! Abort the background fetch so we don't download the CSV twice.
+    controller.abort();
+    
+    // 3. Trigger native download via hidden iframe (fixes UUID filename/blob issues)
+    let iframe = document.getElementById('hiddenDownloader');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'hiddenDownloader';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+    }
+    iframe.src = downloadUrl;
+    
+    closeApiKeyModal();
+    showToast("Export successful.");
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      errorDiv.textContent = `Network error during export: ${e.message}`;
+      errorDiv.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+}
+
 function downloadJson() {
   const a = attestations[selectedIdx];
-  if (!a || !a.full_bundle) return alert("Please wait for the bundle to fully load.");
+  if (!a || !a.full_bundle) return showToast("Please wait for the bundle to fully load.", true);
   
-  const blob = new Blob([JSON.stringify(a.full_bundle, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const aTag = document.createElement('a');
-  aTag.href = url;
-  aTag.download = `CGI-attestation-${a.execution_id}.json`;
-  aTag.click();
-  URL.revokeObjectURL(url);
+  const downloadUrl = `${API_BASE}/v1/attestation/${a.execution_id}/download${authQ}`;
+  
+  let iframe = document.getElementById('hiddenDownloader');
+  if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'hiddenDownloader';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+  }
+  iframe.src = downloadUrl;
 }
 
 async function downloadProof() {
   const a = attestations[selectedIdx];
   if (!a) return;
-  
   try {
-    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/proof`);
-    if (res.ok) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const aTag = document.createElement('a');
-      aTag.href = url;
-      aTag.download = `anchor-${a.execution_id}.ots`;
-      aTag.click();
-      URL.revokeObjectURL(url);
-    } else {
+    const downloadUrl = `${API_BASE}/v1/attestation/${a.execution_id}/proof${authQ}`;
+    const controller = new AbortController();
+    const res = await fetch(downloadUrl, { signal: controller.signal });
+    const contentType = res.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
       const err = await res.json();
-      alert("Error: " + (err.detail || "Proof not found. It may not be anchored yet."));
+      showToast("Error: " + (err.detail || "Proof not found. It may not be anchored yet."), true);
+      return;
     }
+    
+    controller.abort();
+    
+    let iframe = document.getElementById('hiddenDownloader');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'hiddenDownloader';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+    }
+    iframe.src = downloadUrl;
+    
   } catch (e) {
-    alert("Network Error downloading proof.");
+    if (e.name !== 'AbortError') {
+      showToast("Network Error downloading proof.", true);
+    }
   }
 }
 
 // Verification logic
 async function verifyCrypto() {
   const a = attestations[selectedIdx];
-  if (!a || !a.full_bundle) return alert("Please wait for the bundle to load.");
+  if (!a || !a.full_bundle) return showToast("Please wait for the bundle to load.", true);
   
   const resContainer = document.getElementById('verifyResultContainer');
   const btn = document.getElementById('verifyBtn');
@@ -556,17 +974,40 @@ async function verifyCrypto() {
   btn.textContent = 'Verifying with Ledger...';
   
   try {
-    // We hit the newly added /v1/attestation/ endpoint to confirm the record exists
-    // immutably in the WAL SQLite database, proving it was cryptographically signed
-    // by the governance node.
-    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}`);
+    const res = await fetch(`${API_BASE}/v1/attestation/${a.execution_id}/verify${authQ}`, { method: 'POST' });
     if (res.ok) {
-       resContainer.innerHTML = '<div class="verify-badge success">✓ LEDGER CONFIRMED: Attestation is authentic and un-tampered in the immutable audit ledger.</div>';
+       const result = await res.json();
+       let html = '';
+       
+       if (result.status === "PASS") {
+         html += '<div style="display:block; margin-bottom: 12px; padding: 12px; border: 1px solid var(--success); border-radius: 4px; color: var(--success); font-weight: 600; text-transform: uppercase;">Verification Passed</div>';
+       } else {
+         html += '<div style="display:block; margin-bottom: 12px; padding: 12px; border: 1px solid var(--error); border-radius: 4px; color: var(--error); font-weight: 600; text-transform: uppercase;">Verification Failed</div>';
+       }
+       html += `<h4>Verification Results</h4>
+      <ul style="list-style: none; padding: 0; margin: 0; line-height: 1.6;">
+        <li><strong>Governance Signature:</strong> <span style="color: ${result.signature_valid ? 'var(--success)' : 'var(--error)'}">${result.signature_valid ? 'Valid' : 'Failed'}</span></li>
+        <li><strong>Semantic Bounds & Hashes:</strong> <span style="color: ${result.semantic_bounds_valid ? 'var(--success)' : 'var(--error)'}">${result.semantic_bounds_valid ? 'Valid' : 'Failed'}</span></li>
+    `;
+    
+    if (result.zk_proof_valid !== "N/A") {
+      html += `<li><strong>Zero-Knowledge Proof:</strong> <span style="color: ${result.zk_proof_valid ? 'var(--success)' : 'var(--error)'}">${result.zk_proof_valid ? 'Valid' : 'Failed'}</span></li>`;
+    }   
+       if (result.errors && result.errors.length > 0) {
+         html += '<div style="margin-top: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--error); border-left: 2px solid var(--error); padding-left: 8px;">';
+         result.errors.forEach(err => {
+           html += `<div>- ${err}</div>`;
+         });
+         html += '</div>';
+       }
+       
+       resContainer.innerHTML = html;
     } else {
-       resContainer.innerHTML = '<div class="verify-badge error">✗ INVALID: Attestation not found in ledger.</div>';
+       const err = await res.json();
+       resContainer.innerHTML = `<div style="color: var(--error); padding: 12px; border: 1px solid var(--error);">INVALID: ${err.detail || "Server error during verification"}</div>`;
     }
   } catch (e) {
-    resContainer.innerHTML = `<div class="verify-badge error">✗ Error: ${e.message}</div>`;
+    resContainer.innerHTML = `<div style="color: var(--error); padding: 12px; border: 1px solid var(--error);">Error: ${e.message}</div>`;
   }
   
   btn.disabled = false;
@@ -601,10 +1042,35 @@ async function triggerAnchor() {
     btn.textContent = 'Anchored Successfully!';
     setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 2000);
   } catch (e) {
-    alert("Error triggering anchor.");
+    showToast("Error triggering anchor.", true);
   }
 }
 
 </script>
+
+<div id="apiKeyModal" class="modal-overlay">
+  <div class="modal-content">
+    <h3>Authentication Required</h3>
+    <p>Please enter your API Key with <strong>'audit'</strong> scope and the timeframe you wish to export.</p>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <div style="flex: 3;">
+        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 4px;">API Key</label>
+        <input type="password" id="csvApiKeyInput" placeholder="Enter API Key" onkeydown="if(event.key === 'Enter') submitExportCsv()" style="margin-bottom: 0;">
+      </div>
+      <div style="flex: 1;">
+        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 4px;">Days Back</label>
+        <input type="number" id="csvDaysInput" value="30" min="1" max="365" onkeydown="if(event.key === 'Enter') submitExportCsv()" style="margin-bottom: 0;">
+      </div>
+    </div>
+    <div id="csvModalError" style="color: var(--error); margin-bottom: 12px; font-size: 12px; display: none;"></div>
+
+    <div class="modal-actions">
+      <button onclick="closeApiKeyModal()" class="btn-cancel">Cancel</button>
+      <button onclick="submitExportCsv()" class="btn-primary">Export CSV</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

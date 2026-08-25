@@ -66,6 +66,7 @@ class CohereCommandAdapter(BaseAdapter):
     def generate(
         self,
         prompt: str,
+        model_id: str,
         max_tokens: int,
         execution_id: str,
         seed: int,
@@ -77,8 +78,9 @@ class CohereCommandAdapter(BaseAdapter):
             "Accept": "application/json",
         }
 
+        active_model = model_id if model_id else self._model_id
         body = {
-            "model": self._model_id,
+            "model": active_model,
             "message": prompt,
             "preamble": self._preamble,
             "max_tokens": max_tokens,

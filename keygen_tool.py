@@ -240,8 +240,12 @@ def cmd_issue(args: argparse.Namespace) -> None:
     })
     _save_registry(registry)
 
+    # Also produce a compact, single-line license key string for easy delivery
+    compact_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    compact_key = "CGI-" + base64.urlsafe_b64encode(compact_json.encode("utf-8")).decode("utf-8")
+
     print()
-    print(_g("✅  LICENSE ISSUED SUCCESSFULLY"))
+    print(_g("LICENSE ISSUED SUCCESSFULLY"))
     print()
     print(f"  {'License ID':<22} {license_id}")
     print(f"  {'Licensee':<22} {args.licensee}")
@@ -252,13 +256,24 @@ def cmd_issue(args: argparse.Namespace) -> None:
     print(f"  {'Req/Min':<22} {tier_defaults['max_requests_per_minute']}")
     print(f"  {'Blockchain Anchor':<22} {'YES' if tier_defaults['blockchain_anchor'] else 'NO'}")
     print()
-    print(f"  License file saved to:")
-    print(f"  {_c(license_file)}")
+    print(_b("  ════════════════════════════════════════════════════════"))
+    print(_b("  LICENSE KEY (send this to the client)"))
+    print(_b("  ════════════════════════════════════════════════════════"))
     print()
-    print(_b("  ▶ Delivery Instructions:"))
-    print(f"  1. Send the client: {license_file}")
-    print(f"  2. They place it in their deployment directory")
-    print(f"  3. Set: CGI_LICENSE_KEY_PATH={license_file}")
+    # Print the key in 72-char chunks for readability
+    for i in range(0, len(compact_key), 72):
+        print(f"  {compact_key[i:i+72]}")
+    print()
+    print(_b("  ════════════════════════════════════════════════════════"))
+    print()
+    print(_b("  Client Activation (one command):"))
+    print(f"  curl -X POST http://localhost:8000/v1/license/activate \\")
+    print(f"    -H 'Content-Type: application/json' \\")
+    print(f"    -d '{{\"license_key\": \"<paste key above>\"}}' ")
+    print()
+    print(_d("  Or via the CGI Protocol Dashboard -> License tab -> Paste & Activate"))
+    print()
+    print(f"  JSON file also saved: {_c(license_file)}")
     print()
 
 

@@ -39,12 +39,22 @@ def generate_governance_keys(auth_dir: str = None) -> None:
 
     key = ec.generate_private_key(ec.SECP256K1())
 
+    # Get passphrase from environment if available
+    from dotenv import load_dotenv
+    load_dotenv()
+    passphrase_str = os.environ.get("PRIVATE_KEY_PASSPHRASE")
+    if passphrase_str:
+        encryption_alg = serialization.BestAvailableEncryption(passphrase_str.encode("utf-8"))
+        print("    [Info] Using passphrase from PRIVATE_KEY_PASSPHRASE to encrypt key.")
+    else:
+        encryption_alg = serialization.NoEncryption()
+
     # Write private key
     with open(priv_path, "wb") as f:
         f.write(key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
+            encryption_algorithm=encryption_alg,
         ))
 
     # Set restrictive permissions on Unix

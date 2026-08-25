@@ -12,23 +12,23 @@
 # and Caddy will generate a self-signed certificate.
 
 # ── Option A: With a domain (recommended for production) ────
-# Uncomment and replace YOUR_DOMAIN:
-# YOUR_DOMAIN {
-#     reverse_proxy cgi-gateway:8000
-#     header {
-#         Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-#         X-Content-Type-Options nosniff
-#         X-Frame-Options DENY
-#         Referrer-Policy strict-origin-when-cross-origin
-#     }
-# }
-
-# ── Option B: Without a domain (self-signed cert) ──────────
-:80 {
+# Replace api.cgi-protocol.internal with your actual domain
+api.cgi-protocol.internal, :443 {
     reverse_proxy cgi-gateway:8000
+    
+    # Require TLS
+    tls internal
+
     header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
         Referrer-Policy strict-origin-when-cross-origin
+        Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
     }
+
+    # Optional: Rate limiting at proxy layer can be added here
+    # request_body {
+    #     max_size 10MB
+    # }
 }

@@ -11,7 +11,7 @@ logger = logging.getLogger("cgi.adapters.hf")
 BASE_DIR = settings.BASE_DIR
 
 class HuggingFaceLocalAdapter(BaseAdapter):
-    def generate(self, prompt: str, max_tokens: int, execution_id: str, seed: int) -> Tuple[str, str, int]:
+    def generate(self, prompt: str, model_id: str, max_tokens: int, execution_id: str, seed: int) -> Tuple[str, str, int]:
         worker_path = os.path.join(BASE_DIR, "adapters", "hf_worker.py")
         stdin_payload = json.dumps({
             "payload": prompt,
@@ -51,7 +51,7 @@ class HuggingFaceLocalAdapter(BaseAdapter):
                          execution_id, process.returncode, process.stderr[-500:])
             raise RuntimeError(f"Worker failed with code {process.returncode}")
 
-        generated_text, stop_reason, token_count = self._parse_worker_output(process.stdout)
+        generated_text, stop_reason, token_count, actual_model = self._parse_worker_output(process.stdout)
         
         if not generated_text.strip():
             logger.error("WORKER_EMPTY_OUTPUT | exec_id=%s stderr=%s", 
@@ -60,13 +60,14 @@ class HuggingFaceLocalAdapter(BaseAdapter):
             
         return generated_text, stop_reason, token_count
 
-    def _parse_worker_output(self, stdout: str) -> Tuple[str, str, int]:
+    def _parse_worker_output(self, stdout: str) -> Tuple[str, str, int, str]:
         """
         Deterministic parser for hf_worker.py stdout protocol.
         """
         generated_text = ""
         stop_reason = "limit_reached"
         token_count = 0
+        actual_model = settings.MODEL_ID
 
         for raw_line in stdout.split("\n"):
             line = raw_line.strip()
@@ -94,4 +95,10 @@ class HuggingFaceLocalAdapter(BaseAdapter):
                 except IndexError:
                     stop_reason = "unknown"
 
-        return generated_text, stop_reason, token_count
+            elif line.startswith("[MODEL_META]"):
+                try:
+                    actual_model = line.split("actual_model=")[1].strip()
+                except IndexError:
+                    pass
+
+        return generated_text, stop_reason, token_count, actual_model

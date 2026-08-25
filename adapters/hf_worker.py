@@ -148,6 +148,21 @@ model = AutoModelForCausalLM.from_pretrained(
 model.eval()
 torch.set_grad_enabled(False)
 
+actual_model_name = getattr(model.config, "_name_or_path", MODEL_PATH)
+
+# Clever approach for self-hosted models: compute a hash of the config file
+import os, hashlib
+config_path = os.path.join(MODEL_PATH, "config.json")
+if os.path.exists(config_path):
+    try:
+        with open(config_path, "rb") as f:
+            config_hash = hashlib.sha256(f.read()).hexdigest()[:8]
+        actual_model_name = f"{actual_model_name}@{config_hash}"
+    except Exception:
+        pass
+
+print(f"[MODEL_META] actual_model={actual_model_name}", flush=True)
+
 
 # =========================================================
 # INPUT

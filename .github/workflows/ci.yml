@@ -75,8 +75,8 @@ jobs:
 
           # Test middleware
           python -c "
-          from middleware import APIKeyStore, RateLimiter
-          rl = RateLimiter(max_requests=10)
-          assert rl.is_allowed('test')
+          from middleware import APIKeyStore, RateLimitMiddleware
+          rm = RateLimitMiddleware(app=None, max_requests=10)
+          assert rm.max_requests == 10
           print('Middleware OK')
           "

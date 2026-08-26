@@ -1,4 +1,4 @@
-# CGI Protocol — Healthcare Verifiable AI
+# CGI Protocol — Verifiable AI
 
 **Cryptographic Governance Infrastructure for auditable, verifiable AI inference.**
 
@@ -40,7 +40,7 @@ Every AI response includes a **Sovereign Attestation Bundle (SAB)** — a crypto
 
 ```bash
 # Clone and enter
-git clone https://github.com/YOUR_ORG/CGI-Protocol.git
+git clone https://github.com/ObedMokuaNyandiri/CGI-Protocol.git
 cd CGI-Protocol
 
 # Create environment

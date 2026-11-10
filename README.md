@@ -1,8 +1,8 @@
-# CGI Protocol — Verifiable AI
+# CGI Protocol Verifiable AI
 
 **Cryptographic Governance Infrastructure for auditable, verifiable AI inference.**
 
-CGI Protocol makes AI decision-making cryptographically provable. Every inference is signed, attested, and recorded in an immutable audit chain — designed for regulated industries where AI decisions must be explainable, tamper-evident, and independently verifiable.
+CGI Protocol makes AI decision-making cryptographically provable. Every inference is signed, attested, and recorded in an immutable audit chain, designed for regulated industries where AI decisions must be explainable, tamper-evident, and independently verifiable.
 
 ## What It Does
 
